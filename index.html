@@ -1,169 +1,62 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internal Ordering V2</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-</head>
-<body class="bg-slate-100 min-h-screen p-4">
+async function submitOrder() {
+    const dateInput = document.getElementById('delivery-date').value;
+    if (!dateInput) return alert("Select a delivery date");
 
-    <div id="login-card" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-2xl shadow-xl">
-        <h1 class="text-2xl font-bold text-center text-slate-800 mb-2">Internal Ordering</h1>
-        <p class="text-center text-slate-500 mb-8 text-sm">Please log in with your Venue ID</p>
-        <div class="space-y-4">
-            <input id="username" type="text" placeholder="User ID" class="w-full p-3 border rounded-lg uppercase">
-            <input id="password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg">
-            <button onclick="handleLogin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700">Sign In</button>
-        </div>
-    </div>
+    const now = new Date();
+    const selectedDate = new Date(dateInput);
+    selectedDate.setHours(0,0,0,0);
+    
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-    <div id="dashboard" class="hidden max-w-2xl mx-auto bg-white p-6 rounded-2xl shadow-xl">
-        <div class="flex justify-between items-center mb-6 border-b pb-4">
-            <div>
-                <h1 id="welcome-msg" class="text-2xl font-bold text-slate-800 uppercase">Venue</h1>
-                <p id="user-role" class="text-xs font-bold text-blue-500 uppercase tracking-widest"></p>
-            </div>
-            <button onclick="location.reload()" class="bg-slate-100 px-4 py-2 rounded-lg text-red-500 text-sm font-bold">Logout</button>
-        </div>
+    // 1. Basic Date Guards
+    if (selectedDate <= today && currentUser.role !== 'manager') {
+        return alert("Contact Kitchen Manager for same-day orders.");
+    }
 
-        <div class="space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Supplier</label>
-                    <select id="supplier-select" onchange="loadProducts()" class="w-full p-3 border rounded-xl bg-slate-50 font-semibold">
-                        <option value="CK">Central Kitchen (CK)</option>
-                        <option value="DSQ">DSQ Kitchen (DSQ)</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Delivery Date</label>
-                    <input id="delivery-date" type="date" class="w-full p-3 border rounded-xl bg-slate-50 font-semibold">
-                </div>
-            </div>
+    // 2. 1:00 PM Cutoff check for Tomorrow
+    if (selectedDate.getTime() === tomorrow.getTime() && now.getHours() >= 13 && currentUser.role !== 'manager') {
+        return alert("Past 1:00 PM cutoff for tomorrow.");
+    }
 
-            <div id="product-list" class="space-y-2 border-t pt-4">
-                <p class="text-center text-slate-400 py-10 italic">Select a supplier to see items...</p>
-            </div>
+    // 3. LEAD TIME CHECK
+    const orderItems = [];
+    let leadTimeViolation = false;
 
-            <button onclick="submitOrder()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all">
-                Submit Order
-            </button>
-        </div>
-    </div>
+    activeProducts.forEach(p => {
+        const qty = document.getElementById(`qty-${p.id}`).value;
+        if (qty > 0) {
+            // Calculate minimum allowed date based on lead time
+            // If lead_time is 2, and today is Monday, min date is Wednesday
+            const minDate = new Date(today);
+            minDate.setDate(today.getDate() + (p.lead_time || 1));
 
-    <script>
-        const SUPABASE_URL = 'https://lmkmzcbgzpkprkvrwibn.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxta216Y2JnenBrcHJrdnJ3aWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODU0NzYsImV4cCI6MjA4MzM2MTQ3Nn0.u0cw2sNejJP-21CXNbeT9oYLuwMC8vZc9E23a4VIbOU';
-        const { createClient } = supabase;
-        const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-        let currentUser = null;
-        let activeProducts = [];
-
-        const USERS = [
-            { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'staff' },
-            { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'staff' },
-            { id: 'dsqkstaff', pw: 'dsqkstaff', venue: 'DSQK', role: 'staff' },
-            { id: 'kitchenmanager', pw: 'kitchenmanager', venue: 'CK', role: 'manager' }
-        ];
-
-        async function handleLogin() {
-            const userInp = document.getElementById('username').value.toLowerCase();
-            const passInp = document.getElementById('password').value;
-            const found = USERS.find(u => u.id === userInp && u.pw === passInp);
-
-            if (found) {
-                currentUser = found;
-                document.getElementById('login-card').classList.add('hidden');
-                document.getElementById('dashboard').classList.remove('hidden');
-                document.getElementById('welcome-msg').innerText = "Venue: " + found.venue;
-                document.getElementById('user-role').innerText = found.role.replace('_', ' ');
-                loadProducts();
-            } else {
-                alert("Invalid Login");
+            if (selectedDate < minDate && currentUser.role !== 'manager') {
+                alert(`ITEM ERROR: "${p.name}" requires ${p.lead_time} days lead time. Earliest delivery for this item is ${minDate.toDateString()}.`);
+                leadTimeViolation = true;
             }
+
+            orderItems.push({ name: p.name, quantity: qty, unit: p.unit });
         }
+    });
 
-        async function loadProducts() {
-            const supplier = document.getElementById('supplier-select').value;
-            const container = document.getElementById('product-list');
-            container.innerHTML = `<div class="p-10 text-center animate-pulse text-slate-400">Fetching ${supplier} products...</div>`;
+    if (leadTimeViolation) return; // Stop the order if lead time isn't met
+    if (orderItems.length === 0) return alert("Order is empty!");
 
-            const { data, error } = await _supabase.from('products').select('*').eq('supplier', supplier);
+    // ... (rest of the insert code remains the same)
+    const { error } = await _supabase.from('orders').insert([{
+        venue_id: currentUser.venue,
+        delivery_date: dateInput,
+        delivery_slot: document.getElementById('delivery-slot').value,
+        items: orderItems,
+        status: 'submitted'
+    }]);
 
-            if (data) {
-                activeProducts = data;
-                container.innerHTML = "";
-                
-                data.forEach(prod => {
-                    // Check restrictions
-                    if (prod.restricted_to && prod.restricted_to !== currentUser.venue) return;
-
-                    const div = document.createElement('div');
-                    div.className = "flex items-center justify-between p-4 border rounded-xl bg-white hover:border-blue-200 transition-colors";
-                    div.innerHTML = `
-                        <div>
-                            <p class="font-bold text-slate-800">${prod.name}</p>
-                            <p class="text-[10px] uppercase font-bold text-slate-400 tracking-tighter">${prod.unit}</p>
-                        </div>
-                        <input type="number" id="qty-${prod.id}" min="0" placeholder="0" class="w-16 p-2 bg-slate-50 border rounded-lg text-center font-black text-blue-600 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
-                    `;
-                    container.appendChild(div);
-                });
-            }
-        }
-
-        async function submitOrder() {
-            const dateInput = document.getElementById('delivery-date').value;
-            if (!dateInput) return alert("Please select a delivery date");
-
-            const now = new Date();
-            const selectedDate = new Date(dateInput);
-            selectedDate.setHours(0,0,0,0);
-            
-            const today = new Date();
-            today.setHours(0,0,0,0);
-            
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-
-            // 1. BLOCK TODAY (Safety first!)
-            if (selectedDate <= today && currentUser.role !== 'manager') {
-                return alert("You cannot place an order for today. Please contact the Kitchen Manager for emergencies.");
-            }
-
-            // 2. 1:00 PM CUTOFF FOR TOMORROW
-            if (selectedDate.getTime() === tomorrow.getTime() && now.getHours() >= 13 && currentUser.role !== 'manager') {
-                return alert("It is past 1:00 PM. Orders for tomorrow are now closed for staff.");
-            }
-
-            const orderItems = [];
-            activeProducts.forEach(p => {
-                const qty = document.getElementById(`qty-${p.id}`).value;
-                if (qty > 0) {
-                    orderItems.push({ name: p.name, quantity: qty, unit: p.unit });
-                }
-            });
-
-            if (orderItems.length === 0) return alert("Your order is empty!");
-
-            const { error } = await _supabase.from('orders').insert([{
-                venue_id: currentUser.venue,
-                delivery_date: dateInput,
-                delivery_slot: "1st Delivery",
-                items: orderItems,
-                status: 'submitted'
-            }]);
-
-            if (!error) {
-                alert("🚀 Order confirmed for " + dateInput);
-                location.reload();
-            } else {
-                alert("Error: " + error.message);
-            }
-        }
-    </script>
-</body>
-</html>
+    if (!error) {
+        alert("Order Confirmed!");
+        handleLogin(); 
+    }
+}
