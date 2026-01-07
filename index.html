@@ -3,9 +3,158 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internal Ordering V2</title>
+    <title>BOH Ordering V2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    
+    <script>
+        // --- 1. CONFIGURATION (REPLACE WITH YOUR KEYS) ---
+        const SUPABASE_URL = 'https://lmkmzcbgzpkprkvrwibn.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxta216Y2JnenBrcHJrdnJ3aWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODU0NzYsImV4cCI6MjA4MzM2MTQ3Nn0.u0cw2sNejJP-21CXNbeT9oYLuwMC8vZc9E23a4VIbOU';
+        
+        let _supabase;
+        let currentUser = null;
+        let activeProducts = [];
+
+        // Setup the "Brain"
+        window.onload = () => {
+            _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        };
+
+        const USERS = [
+            { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'staff' },
+            { id: 'wynmanager', pw: 'wynmanager', venue: 'WYN', role: 'manager' },
+            { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'staff' },
+            { id: 'mccmanager', pw: 'mccmanager', venue: 'MCC', role: 'manager' },
+            { id: 'wsqstaff', pw: 'wsqstaff', venue: 'WSQ', role: 'staff' },
+            { id: 'wsqmanager', pw: 'wsqmanager', venue: 'WSQ', role: 'manager' },
+            { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'staff' },
+            { id: 'dsqmanager', pw: 'dsqmanager', venue: 'DSQ', role: 'manager' },
+            { id: 'dsqkstaff', pw: 'dsqkstaff', venue: 'DSQK', role: 'staff' },
+            { id: 'dsqkmanager', pw: 'dsqkmanager', venue: 'DSQK', role: 'manager' },
+            { id: 'gjstaff', pw: 'gjstaff', venue: 'GJ', role: 'staff' },
+            { id: 'gjmanager', pw: 'gjmanager', venue: 'GJ', role: 'manager' },
+            { id: 'ckstaff', pw: 'ckstaff', venue: 'CK', role: 'staff' },
+            { id: 'ckmanager', pw: 'ckmanager', venue: 'CK', role: 'manager' }
+        ];
+
+        function handleLogin() {
+            const u = document.getElementById('username').value.toLowerCase().trim();
+            const p = document.getElementById('password').value.trim();
+            const found = USERS.find(x => x.id === u && x.pw === p);
+
+            if (found) {
+                currentUser = found;
+                document.getElementById('login-card').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                document.getElementById('welcome-msg').innerText = "Venue: " + found.venue;
+                document.getElementById('user-role-display').innerText = found.role;
+                loadProducts();
+                loadHistory();
+            } else {
+                alert("Invalid Login Credentials");
+            }
+        }
+
+        async function loadProducts() {
+            const supplier = document.getElementById('supplier-select').value;
+            const container = document.getElementById('product-list');
+            container.innerHTML = `<div class="p-10 text-center animate-pulse text-slate-400 text-xs">Loading Inventory...</div>`;
+
+            const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
+            if (data) {
+                activeProducts = data;
+                container.innerHTML = "";
+                data.forEach(prod => {
+                    if (prod.restricted_to && !prod.restricted_to.includes(currentUser.venue)) return;
+
+                    const div = document.createElement('div');
+                    div.className = "flex items-center justify-between p-4 border border-slate-50 rounded-xl mb-1 bg-slate-50/50 hover:bg-white transition-colors";
+                    div.innerHTML = `
+                        <div>
+                            <p class="text-sm font-bold text-slate-800">${prod.name}</p>
+                            <p class="text-[10px] text-slate-400 font-bold uppercase">${prod.unit} 
+                                ${prod.lead_time > 1 ? `<span class="text-orange-500 ml-2 bg-orange-50 px-1 rounded">[${prod.lead_time} DAY LEAD]</span>` : ''}
+                            </p>
+                        </div>
+                        <input type="number" id="qty-${prod.id}" min="0" placeholder="0" class="w-16 p-2 bg-white border border-slate-200 rounded-lg text-center font-bold text-blue-600 outline-none focus:ring-2 focus:ring-blue-500">
+                    `;
+                    container.appendChild(div);
+                });
+            }
+        }
+
+        async function loadHistory() {
+            const container = document.getElementById('history-container');
+            const { data } = await _supabase.from('orders').select('*').eq('venue_id', currentUser.venue).order('created_at', { ascending: false }).limit(5);
+            if (data && data.length > 0) {
+                container.innerHTML = data.map(o => `
+                    <div class="p-4 border border-slate-100 rounded-xl bg-white text-xs shadow-sm">
+                        <div class="flex justify-between font-bold mb-2"><span class="text-slate-400 font-normal">Delivery: ${o.delivery_date}</span><span class="text-blue-600 uppercase">${o.delivery_slot}</span></div>
+                        <div class="text-slate-700 italic">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</div>
+                    </div>
+                `).join('');
+            } else {
+                container.innerHTML = '<p class="text-center text-slate-300 text-xs py-4">No recent history.</p>';
+            }
+        }
+
+        async function submitOrder() {
+            const dateStr = document.getElementById('delivery-date').value;
+            if (!dateStr) return alert("Please select a delivery date.");
+
+            const now = new Date();
+            const selectedDate = new Date(dateStr);
+            selectedDate.setHours(0,0,0,0);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+
+            const isKitchenAdmin = (currentUser.role === 'manager' && (currentUser.venue === 'CK' || currentUser.venue === 'DSQK'));
+
+            if (selectedDate <= today && !isKitchenAdmin) {
+                return alert("Orders for Today are closed. Please call the Kitchen.");
+            }
+
+            if (selectedDate.getTime() === tomorrow.getTime() && now.getHours() >= 13 && !isKitchenAdmin) {
+                return alert("Past 1:00 PM cutoff for tomorrow.");
+            }
+
+            const orderItems = [];
+            let ltViolation = false;
+
+            activeProducts.forEach(p => {
+                const q = parseInt(document.getElementById(`qty-${p.id}`).value) || 0;
+                if (q > 0) {
+                    const minDate = new Date(today);
+                    minDate.setDate(today.getDate() + (p.lead_time || 1));
+                    if (selectedDate < minDate && !isKitchenAdmin) {
+                        alert(`ITEM ERROR: "${p.name}" requires ${p.lead_time} days lead time.`);
+                        ltViolation = true;
+                    }
+                    orderItems.push({ name: p.name, quantity: q, unit: p.unit });
+                }
+            });
+
+            if (ltViolation || orderItems.length === 0) return;
+
+            const { error } = await _supabase.from('orders').insert([{
+                venue_id: currentUser.venue,
+                delivery_date: dateStr,
+                delivery_slot: document.getElementById('delivery-slot').value,
+                items: orderItems,
+                status: 'submitted'
+            }]);
+
+            if (!error) {
+                alert("Order Confirmed!");
+                handleLogin();
+            } else {
+                alert("Error: " + error.message);
+            }
+        }
+    </script>
 </head>
 <body class="bg-slate-100 min-h-screen p-4 pb-20 font-sans text-slate-900">
 
@@ -50,9 +199,7 @@
                 </div>
             </div>
 
-            <div id="product-list" class="space-y-2 border-t pt-4">
-                <p class="text-center text-slate-400 py-10 italic text-sm">Select supplier...</p>
-            </div>
+            <div id="product-list" class="space-y-2 border-t pt-4"></div>
 
             <button onclick="submitOrder()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition-all active:scale-95">Submit Order</button>
         </div>
@@ -63,40 +210,5 @@
         </div>
     </div>
 
-    <script>
-        // --- CONFIGURATION ---
-        const SUPABASE_URL = 'https://lmkmzcbgzpkprkvrwibn.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxta216Y2JnenBrcHJrdnJ3aWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODU0NzYsImV4cCI6MjA4MzM2MTQ3Nn0.u0cw2sNejJP-21CXNbeT9oYLuwMC8vZc9E23a4VIbOU';
-        const { createClient } = supabase;
-        const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-        let currentUser = null;
-        let activeProducts = [];
-
-        const USERS = [
-            { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'staff' },
-            { id: 'wynmanager', pw: 'wynmanager', venue: 'WYN', role: 'manager' },
-            { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'staff' },
-            { id: 'mccmanager', pw: 'mccmanager', venue: 'MCC', role: 'manager' },
-            { id: 'wsqstaff', pw: 'wsqstaff', venue: 'WSQ', role: 'staff' },
-            { id: 'wsqmanager', pw: 'wsqmanager', venue: 'WSQ', role: 'manager' },
-            { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'staff' },
-            { id: 'dsqmanager', pw: 'dsqmanager', venue: 'DSQ', role: 'manager' },
-            { id: 'dsqkstaff', pw: 'dsqkstaff', venue: 'DSQK', role: 'staff' },
-            { id: 'dsqkmanager', pw: 'dsqkmanager', venue: 'DSQK', role: 'manager' },
-            { id: 'gjstaff', pw: 'gjstaff', venue: 'GJ', role: 'staff' },
-            { id: 'gjmanager', pw: 'gjmanager', venue: 'GJ', role: 'manager' },
-            { id: 'ckstaff', pw: 'ckstaff', venue: 'CK', role: 'staff' },
-            { id: 'ckmanager', pw: 'ckmanager', venue: 'CK', role: 'manager' }
-        ];
-
-        async function handleLogin() {
-            const u = document.getElementById('username').value.toLowerCase().trim();
-            const p = document.getElementById('password').value.trim();
-            const found = USERS.find(x => x.id === u && x.pw === p);
-
-            if (found) {
-                currentUser = found;
-                document.getElementById('login-card').classList.add('hidden');
-                document.getElementById('dashboard').classList.remove('hidden');
-                document.getElementById('welcome-msg').innerText = "Venue: "
+</body>
+</html>
