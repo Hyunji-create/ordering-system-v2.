@@ -10,12 +10,12 @@
 <body class="bg-slate-100 min-h-screen p-4 pb-20 font-sans text-slate-900">
 
     <div id="login-card" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-2xl shadow-xl border border-slate-200">
-        <h1 class="text-2xl font-bold text-center text-slate-800 mb-2">BOH Ordering</h1>
-        <p class="text-center text-slate-500 mb-8 text-sm uppercase tracking-widest text-blue-600 font-bold">Portal</p>
+        <h1 class="text-2xl font-bold text-center text-slate-800 mb-2 font-serif">BOH Ordering</h1>
+        <p class="text-center text-slate-500 mb-8 text-xs tracking-widest uppercase">Internal Portal</p>
         <div class="space-y-4">
             <input id="username" type="text" placeholder="User ID" class="w-full p-4 border rounded-xl uppercase outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
             <input id="password" type="password" placeholder="Password" class="w-full p-4 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
-            <button id="login-btn" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl hover:bg-black transition-all shadow-lg">Sign In</button>
+            <button id="login-btn" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl hover:bg-black transition-all shadow-lg active:scale-95">Sign In</button>
         </div>
     </div>
 
@@ -25,7 +25,7 @@
                 <h1 id="welcome-msg" class="text-xl font-bold text-slate-800 uppercase tracking-tight">Venue</h1>
                 <p id="user-role-display" class="text-[10px] font-bold text-blue-500 uppercase tracking-widest"></p>
             </div>
-            <button onclick="location.reload()" class="bg-slate-50 px-4 py-2 rounded-lg text-red-500 text-xs font-bold border border-slate-100">Logout</button>
+            <button onclick="location.reload()" class="bg-slate-50 px-4 py-2 rounded-lg text-red-500 text-xs font-bold border border-slate-100 hover:bg-red-50">Logout</button>
         </div>
 
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
@@ -33,168 +33,9 @@
                 <div>
                     <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Supplier</label>
                     <select id="supplier-select" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold">
-                        <option value="CK">Central Kitchen (CK)</option>
+                        <option value="CK text">Central Kitchen (CK)</option>
                         <option value="DSQ">DSQ Kitchen (DSQ)</option>
                     </select>
                 </div>
                 <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Delivery Date</label>
-                    <input id="delivery-date" type="date" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold shadow-sm">
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Slot</label>
-                    <select id="delivery-slot" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold">
-                        <option value="1st Delivery">1st Delivery</option>
-                        <option value="2nd Delivery">2nd Delivery</option>
-                    </select>
-                </div>
-            </div>
-
-            <div id="product-list" class="space-y-2 border-t pt-4"></div>
-            <button id="submit-btn" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition-all active:scale-95">Submit Order</button>
-        </div>
-
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <h2 class="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest text-center border-b pb-2">Recent Orders</h2>
-            <div id="history-container" class="space-y-3"></div>
-        </div>
-    </div>
-
-    <script>
-        const SUPABASE_URL = 'https://lmkmzcbgzpkprkvrwibn.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxta216Y2JnenBrcHJrdnJ3aWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODU0NzYsImV4cCI6MjA4MzM2MTQ3Nn0.u0cw2sNejJP-21CXNbeT9oYLuwMC8vZc9E23a4VIbOU';
-        const { createClient } = supabase;
-        const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-        let currentUser = null;
-        let activeProducts = [];
-
-        const USERS = [
-            { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'staff' },
-            { id: 'wynmanager', pw: 'wynmanager', venue: 'WYN', role: 'manager' },
-            { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'staff' },
-            { id: 'mccmanager', pw: 'mccmanager', venue: 'MCC', role: 'manager' },
-            { id: 'wsqstaff', pw: 'wsqstaff', venue: 'WSQ', role: 'staff' },
-            { id: 'wsqmanager', pw: 'wsqmanager', venue: 'WSQ', role: 'manager' },
-            { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'staff' },
-            { id: 'dsqmanager', pw: 'dsqmanager', venue: 'DSQ', role: 'manager' },
-            { id: 'dsqkstaff', pw: 'dsqkstaff', venue: 'DSQK', role: 'staff' },
-            { id: 'dsqkmanager', pw: 'dsqkmanager', venue: 'DSQK', role: 'manager' },
-            { id: 'gjstaff', pw: 'gjstaff', venue: 'GJ', role: 'staff' },
-            { id: 'gjmanager', pw: 'gjmanager', venue: 'GJ', role: 'manager' },
-            { id: 'ckstaff', pw: 'ckstaff', venue: 'CK', role: 'staff' },
-            { id: 'ckmanager', pw: 'ckmanager', venue: 'CK', role: 'manager' }
-        ];
-
-        // --- BUTTON LISTENERS ---
-        document.getElementById('login-btn').addEventListener('click', handleLogin);
-        document.getElementById('submit-btn').addEventListener('click', submitOrder);
-        document.getElementById('supplier-select').addEventListener('change', loadProducts);
-
-        function handleLogin() {
-            const u = document.getElementById('username').value.toLowerCase().trim();
-            const p = document.getElementById('password').value.trim();
-            const found = USERS.find(x => x.id === u && x.pw === p);
-
-            if (found) {
-                currentUser = found;
-                document.getElementById('login-card').classList.add('hidden');
-                document.getElementById('dashboard').classList.remove('hidden');
-                document.getElementById('welcome-msg').innerText = "Venue: " + found.venue;
-                document.getElementById('user-role-display').innerText = found.role;
-                loadProducts();
-                loadHistory();
-            } else {
-                alert("Invalid Login");
-            }
-        }
-
-        async function loadProducts() {
-            const supplier = document.getElementById('supplier-select').value;
-            const container = document.getElementById('product-list');
-            container.innerHTML = `<div class="p-10 text-center text-slate-400 text-xs">Loading Inventory...</div>`;
-
-            const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
-            if (data) {
-                activeProducts = data;
-                container.innerHTML = "";
-                data.forEach(prod => {
-                    if (prod.restricted_to && !prod.restricted_to.includes(currentUser.venue)) return;
-                    const div = document.createElement('div');
-                    div.className = "flex items-center justify-between p-4 border-b last:border-0";
-                    div.innerHTML = `
-                        <div>
-                            <p class="text-sm font-bold text-slate-800">${prod.name}</p>
-                            <p class="text-[10px] text-slate-400 font-bold uppercase">${prod.unit} ${prod.lead_time > 1 ? `<span class="text-orange-500 ml-2 font-black">[${prod.lead_time} DAY LEAD]</span>` : ''}</p>
-                        </div>
-                        <input type="number" id="qty-${prod.id}" min="0" placeholder="0" class="w-16 p-2 bg-slate-50 border rounded text-center font-bold text-blue-600 outline-none">
-                    `;
-                    container.appendChild(div);
-                });
-            }
-        }
-
-        async function loadHistory() {
-            const container = document.getElementById('history-container');
-            const { data } = await _supabase.from('orders').select('*').eq('venue_id', currentUser.venue).order('created_at', { ascending: false }).limit(3);
-            if (data && data.length > 0) {
-                container.innerHTML = data.map(o => `
-                    <div class="p-3 bg-slate-50 rounded text-xs border border-slate-100 shadow-sm">
-                        <div class="flex justify-between font-bold mb-1"><span class="text-slate-500 font-normal italic">Delivering: ${o.delivery_date}</span><span class="text-blue-600 uppercase">${o.delivery_slot}</span></div>
-                        <div class="text-slate-700">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</div>
-                    </div>
-                `).join('');
-            } else {
-                container.innerHTML = '<p class="text-center text-slate-300 text-xs py-2 italic">No recent orders.</p>';
-            }
-        }
-
-        async function submitOrder() {
-            const dateStr = document.getElementById('delivery-date').value;
-            if (!dateStr) return alert("Select a date");
-
-            const now = new Date();
-            const selectedDate = new Date(dateStr);
-            selectedDate.setHours(0,0,0,0);
-            const today = new Date();
-            today.setHours(0,0,0,0);
-            const tomorrow = new Date(today);
-            tomorrow.setDate(today.getDate() + 1);
-
-            const isKitchenAdmin = (currentUser.role === 'manager' && (currentUser.venue === 'CK' || currentUser.venue === 'DSQK'));
-
-            if (selectedDate <= today && !isKitchenAdmin) return alert("Today's orders are closed.");
-            if (selectedDate.getTime() === tomorrow.getTime() && now.getHours() >= 13 && !isKitchenAdmin) return alert("Past 1:00 PM cutoff.");
-
-            const orderItems = [];
-            let ltViolation = false;
-            activeProducts.forEach(p => {
-                const q = parseInt(document.getElementById(`qty-${p.id}`).value) || 0;
-                if (q > 0) {
-                    const minDate = new Date(today);
-                    minDate.setDate(today.getDate() + (p.lead_time || 1));
-                    if (selectedDate < minDate && !isKitchenAdmin) {
-                        alert(`ITEM ERROR: "${p.name}" requires ${p.lead_time} days lead time.`);
-                        ltViolation = true;
-                    }
-                    orderItems.push({ name: p.name, quantity: q, unit: p.unit });
-                }
-            });
-
-            if (ltViolation || orderItems.length === 0) return;
-
-            const { error } = await _supabase.from('orders').insert([{
-                venue_id: currentUser.venue,
-                delivery_date: dateStr,
-                delivery_slot: document.getElementById('delivery-slot').value,
-                items: orderItems
-            }]);
-
-            if (!error) {
-                alert("Order Sent!");
-                loadHistory(); // Refresh view
-            }
-        }
-    </script>
-</body>
-</html>
+                    <label class="block text-[10px] font-bold uppercase text-slate
