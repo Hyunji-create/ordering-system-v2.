@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Internal Ordering V2</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-slate-100 min-h-screen flex items-center justify-center p-4">
 
@@ -30,17 +30,22 @@
 
     <div id="dashboard" class="hidden w-full max-w-4xl bg-white p-8 rounded-2xl shadow-xl text-center">
         <h1 id="welcome-msg" class="text-3xl font-bold text-slate-800 mb-4">Welcome</h1>
-        <p class="text-slate-600 mb-8">You are successfully logged into the new system.</p>
-        <button onclick="location.reload()" class="text-red-500 font-bold">Logout</button>
+        <p class="text-slate-600 mb-8 font-medium">You are successfully logged into the new system.</p>
+        <div id="action-buttons" class="space-y-4">
+             <button class="w-full py-4 bg-slate-800 text-white rounded-xl font-bold">Place New Order</button>
+        </div>
+        <button onclick="location.reload()" class="mt-8 text-red-500 text-sm font-bold block mx-auto">Logout</button>
     </div>
 
     <script>
         // --- CONFIGURATION ---
-        // PASTE YOUR SUPABASE LINKS HERE:
+        // RE-PASTE YOUR KEYS HERE
         const SUPABASE_URL = 'https://lmkmzcbgzpkprkvrwibn.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxta216Y2JnenBrcHJrdnJ3aWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODU0NzYsImV4cCI6MjA4MzM2MTQ3Nn0.u0cw2sNejJP-21CXNbeT9oYLuwMC8vZc9E23a4VIbOU';
         
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // This is the specific fix for the "Nothing Happens" bug
+        const { createClient } = supabase;
+        const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const USERS = [
             { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'staff' },
@@ -49,12 +54,14 @@
         ];
 
         function handleLogin() {
+            console.log("Login button clicked"); // This helps us debug
             const userInp = document.getElementById('username').value;
             const passInp = document.getElementById('password').value;
 
             const found = USERS.find(u => u.id === userInp && u.pw === passInp);
 
             if (found) {
+                console.log("User found:", found.venue);
                 document.getElementById('login-card').classList.add('hidden');
                 document.getElementById('dashboard').classList.remove('hidden');
                 document.getElementById('welcome-msg').innerText = "Welcome, " + found.venue;
