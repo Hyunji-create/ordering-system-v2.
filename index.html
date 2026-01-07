@@ -179,4 +179,36 @@
 
             const orderItems = [];
             let ltViolation = false;
-            active
+            activeProducts.forEach(p => {
+                const el = document.getElementById(`qty-${p.id}`);
+                const q = el ? (parseInt(el.value) || 0) : 0;
+                if (q > 0) {
+                    const minDate = new Date(today);
+                    minDate.setDate(today.getDate() + (p.lead_time || 1));
+                    if (selectedDate < minDate && !isKitchenAdmin) {
+                        alert(`ITEM ERROR: "${p.name}" requires ${p.lead_time} days lead time.`);
+                        ltViolation = true;
+                    }
+                    orderItems.push({ name: p.name, quantity: q, unit: p.unit });
+                }
+            });
+
+            if (ltViolation || orderItems.length === 0) return;
+
+            const { error } = await _supabase.from('orders').insert([{
+                venue_id: currentUser.venue,
+                delivery_date: dateStr,
+                delivery_slot: document.getElementById('delivery-slot').value,
+                items: orderItems
+            }]);
+
+            if (!error) {
+                alert("Order Sent!");
+                loadHistory();
+            } else {
+                alert("Error: " + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
