@@ -7,66 +7,152 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4">
+<body class="bg-slate-100 min-h-screen p-4">
 
-    <div id="login-card" class="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl">
+    <div id="login-card" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-2xl shadow-xl">
         <h1 class="text-2xl font-bold text-center text-slate-800 mb-2">Internal Ordering</h1>
         <p class="text-center text-slate-500 mb-8 text-sm">Please log in with your Venue ID</p>
-        
         <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-semibold mb-1">User ID</label>
-                <input id="username" type="text" placeholder="e.g. wynstaff" class="w-full p-3 border rounded-lg outline-blue-500">
+            <input id="username" type="text" placeholder="User ID" class="w-full p-3 border rounded-lg">
+            <input id="password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg">
+            <button onclick="handleLogin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700">Sign In</button>
+        </div>
+    </div>
+
+    <div id="dashboard" class="hidden max-w-2xl mx-auto bg-white p-6 rounded-2xl shadow-xl">
+        <div class="flex justify-between items-center mb-6">
+            <h1 id="welcome-msg" class="text-2xl font-bold text-slate-800">Welcome</h1>
+            <button onclick="location.reload()" class="text-red-500 text-sm font-bold">Logout</button>
+        </div>
+
+        <div class="space-y-6">
+            <div class="grid grid-cols-1 gap-4">
+                <div>
+                    <label class="block text-sm font-bold mb-1">Select Supplier</label>
+                    <select id="supplier-select" onchange="loadProducts()" class="w-full p-3 border rounded-lg bg-gray-50">
+                        <option value="CK">Central Kitchen</option>
+                        <option value="DSQ">DSQ Kitchen</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-1">Delivery Date</label>
+                    <input id="delivery-date" type="date" class="w-full p-3 border rounded-lg bg-gray-50">
+                </div>
             </div>
-            <div>
-                <label class="block text-sm font-semibold mb-1">Password</label>
-                <input id="password" type="password" placeholder="••••••••" class="w-full p-3 border rounded-lg outline-blue-500">
+
+            <div id="product-list" class="space-y-3">
+                <p class="text-center text-slate-400 py-10">Loading products...</p>
             </div>
-            <button onclick="handleLogin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition">
-                Sign In
+
+            <button onclick="submitOrder()" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-green-700 transition">
+                Submit Order
             </button>
         </div>
     </div>
 
-    <div id="dashboard" class="hidden w-full max-w-4xl bg-white p-8 rounded-2xl shadow-xl text-center">
-        <h1 id="welcome-msg" class="text-3xl font-bold text-slate-800 mb-4">Welcome</h1>
-        <p class="text-slate-600 mb-8 font-medium">You are successfully logged into the new system.</p>
-        <div id="action-buttons" class="space-y-4">
-             <button class="w-full py-4 bg-slate-800 text-white rounded-xl font-bold">Place New Order</button>
-        </div>
-        <button onclick="location.reload()" class="mt-8 text-red-500 text-sm font-bold block mx-auto">Logout</button>
-    </div>
-
     <script>
-        // --- CONFIGURATION ---
-        // RE-PASTE YOUR KEYS HERE
         const SUPABASE_URL = 'https://lmkmzcbgzpkprkvrwibn.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxta216Y2JnenBrcHJrdnJ3aWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODU0NzYsImV4cCI6MjA4MzM2MTQ3Nn0.u0cw2sNejJP-21CXNbeT9oYLuwMC8vZc9E23a4VIbOU';
-        
-        // This is the specific fix for the "Nothing Happens" bug
         const { createClient } = supabase;
         const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let currentUser = null;
+        let allProducts = [];
 
         const USERS = [
             { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'staff' },
             { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'staff' },
+            { id: 'dsqkstaff', pw: 'dsqkstaff', venue: 'DSQK', role: 'staff' }, // Test user for Salmon
             { id: 'kitchenmanager', pw: 'kitchenmanager', venue: 'CK', role: 'manager' }
         ];
 
-        function handleLogin() {
-            console.log("Login button clicked"); // This helps us debug
+        async function handleLogin() {
             const userInp = document.getElementById('username').value;
             const passInp = document.getElementById('password').value;
-
             const found = USERS.find(u => u.id === userInp && u.pw === passInp);
 
             if (found) {
-                console.log("User found:", found.venue);
+                currentUser = found;
                 document.getElementById('login-card').classList.add('hidden');
                 document.getElementById('dashboard').classList.remove('hidden');
-                document.getElementById('welcome-msg').innerText = "Welcome, " + found.venue;
+                document.getElementById('welcome-msg').innerText = "Venue: " + found.venue;
+                loadProducts();
             } else {
-                alert("Invalid Login ID or Password");
+                alert("Invalid Login");
+            }
+        }
+
+        async function loadProducts() {
+            const supplier = document.getElementById('supplier-select').value;
+            const container = document.getElementById('product-list');
+            container.innerHTML = "Loading...";
+
+            const { data, error } = await _supabase.from('products').select('*').eq('supplier', supplier);
+
+            if (data) {
+                allProducts = data;
+                container.innerHTML = "";
+                
+                data.forEach(prod => {
+                    // RULE: If restricted_to is set and doesn't match current venue, HIDE IT
+                    if (prod.restricted_to && prod.restricted_to !== currentUser.venue) {
+                        return; 
+                    }
+
+                    const div = document.createElement('div');
+                    div.className = "flex items-center justify-between p-4 border rounded-xl bg-slate-50 shadow-sm";
+                    div.innerHTML = `
+                        <div>
+                            <p class="font-bold text-slate-800">${prod.name}</p>
+                            <p class="text-xs text-slate-500">${prod.unit}</p>
+                        </div>
+                        <input type="number" id="qty-${prod.id}" placeholder="0" class="w-20 p-2 border rounded text-center font-bold">
+                    `;
+                    container.appendChild(div);
+                });
+            }
+        }
+
+        async function submitOrder() {
+            const date = document.getElementById('delivery-date').value;
+            if (!date) return alert("Please select a delivery date");
+
+            // RULE: 1:00 PM CUTOFF
+            const now = new Date();
+            const selectedDate = new Date(date);
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            // Check if selected date is tomorrow
+            const isTomorrow = selectedDate.toDateString() === tomorrow.toDateString();
+            
+            if (isTomorrow && now.getHours() >= 13 && currentUser.role !== 'manager') {
+                return alert("It is past 1:00 PM. Only a Kitchen Manager can place an order for tomorrow.");
+            }
+
+            // Collect items
+            const orderItems = [];
+            allProducts.forEach(p => {
+                const qty = document.getElementById(`qty-${p.id}`).value;
+                if (qty > 0) {
+                    orderItems.push({ name: p.name, quantity: qty, unit: p.unit });
+                }
+            });
+
+            if (orderItems.length === 0) return alert("Please add at least one item.");
+
+            const { error } = await _supabase.from('orders').insert([{
+                venue_id: currentUser.venue,
+                delivery_date: date,
+                delivery_slot: "1st Delivery",
+                items: orderItems
+            }]);
+
+            if (!error) {
+                alert("Order Sent Successfully!");
+                location.reload();
+            } else {
+                alert("Error sending order");
             }
         }
     </script>
