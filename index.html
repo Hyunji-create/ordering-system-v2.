@@ -5,89 +5,216 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BOH Ordering V2</title>
     <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-slate-100 min-h-screen p-4 flex items-center justify-center font-sans">
-
-    <div id="login-card" class="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-slate-200">
-        <h1 class="text-2xl font-bold text-center text-slate-800 mb-6">BOH Ordering</h1>
-        
-        <div id="debug-status" class="text-[10px] text-center mb-4 text-orange-500 font-mono bg-orange-50 p-2 rounded">Initializing...</div>
-
-        <div class="space-y-4">
-            <input id="username" type="text" placeholder="User ID" class="w-full p-4 border rounded-xl uppercase shadow-sm outline-none focus:ring-2 focus:ring-blue-500">
-            <input id="password" type="password" placeholder="Password" class="w-full p-4 border rounded-xl shadow-sm outline-none focus:ring-2 focus:ring-blue-500">
-            <button id="login-btn" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">Sign In</button>
-        </div>
-    </div>
-
-    <div id="dashboard" class="hidden max-w-2xl w-full mx-auto bg-white p-6 rounded-2xl shadow-xl space-y-6">
-        <div class="flex justify-between items-center border-b pb-4">
-            <h1 id="welcome-msg" class="text-xl font-bold uppercase tracking-tight">Venue</h1>
-            <button onclick="location.reload()" class="text-red-500 text-xs font-bold uppercase">Logout</button>
-        </div>
-        <p class="text-center py-20 text-slate-400 italic">Login Successful. Loading Product Engine...</p>
-    </div>
-
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-100 min-h-screen p-4 pb-20 font-sans text-slate-900 text-center">
+
+    <div id="login-card" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-2xl shadow-xl border border-slate-200">
+        <h1 class="text-2xl font-bold text-slate-800 mb-2">BOH Ordering</h1>
+        <p class="text-slate-500 mb-8 text-[10px] tracking-widest uppercase font-bold">Internal Portal</p>
+        <div class="space-y-4">
+            <input id="username" type="text" placeholder="User ID" class="w-full p-4 border rounded-xl uppercase outline-none focus:ring-2 focus:ring-blue-600 shadow-sm">
+            <input id="password" type="password" placeholder="Password" class="w-full p-4 border rounded-xl outline-none focus:ring-2 focus:ring-blue-600 shadow-sm">
+            <button id="login-btn" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl hover:bg-black transition-all shadow-lg active:scale-95">Sign In</button>
+        </div>
+    </div>
+
+    <div id="dashboard" class="hidden max-w-2xl mx-auto space-y-6">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
+            <div class="text-left">
+                <h1 id="welcome-msg" class="text-xl font-bold text-slate-800 uppercase italic">Venue</h1>
+                <p id="user-role-display" class="text-[10px] font-bold text-blue-500 uppercase tracking-widest"></p>
+            </div>
+            <button onclick="location.reload()" class="bg-slate-50 px-4 py-2 rounded-lg text-red-500 text-[10px] font-black border border-slate-100 uppercase hover:bg-red-50">Logout</button>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1 italic">Select Supplier</label>
+                    <select id="supplier-select" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-600">
+                        <option value="CK">Central Kitchen (CK)</option>
+                        <option value="DSQ">DSQ Kitchen (DSQ)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1 italic">Delivery Date</label>
+                    <input id="delivery-date" type="date" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-600 text-center shadow-sm">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1 italic">Slot</label>
+                    <select id="delivery-slot" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-600">
+                        <option value="1st Delivery">1st Delivery</option>
+                        <option value="2nd Delivery">2nd Delivery</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="product-list" class="space-y-2 border-t pt-4 min-h-[100px]"></div>
+
+            <button id="submit-btn" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition-all active:scale-95 uppercase tracking-widest">Submit Order</button>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 class="text-[10px] font-black uppercase text-slate-400 mb-4 tracking-[0.2em] border-b pb-2">Recent Global Activity (All Venues)</h2>
+            <div id="history-container" class="space-y-3"></div>
+        </div>
+    </div>
 
     <script>
         const SUPABASE_URL = 'https://lmkmzcbgzpkprkvrwibn.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxta216Y2JnenBrcHJrdnJ3aWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODU0NzYsImV4cCI6MjA4MzM2MTQ3Nn0.u0cw2sNejJP-21CXNbeT9oYLuwMC8vZc9E23a4VIbOU';
 
         const USERS = [
-            { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'staff' },
-            { id: 'wynmanager', pw: 'wynmanager', venue: 'WYN', role: 'manager' },
-            { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'staff' },
-            { id: 'mccmanager', pw: 'mccmanager', venue: 'MCC', role: 'manager' },
-            { id: 'wsqstaff', pw: 'wsqstaff', venue: 'WSQ', role: 'staff' },
-            { id: 'wsqmanager', pw: 'wsqmanager', venue: 'WSQ', role: 'manager' },
-            { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'staff' },
-            { id: 'dsqmanager', pw: 'dsqmanager', venue: 'DSQ', role: 'manager' },
-            { id: 'dsqkstaff', pw: 'dsqkstaff', venue: 'DSQK', role: 'staff' },
-            { id: 'dsqkmanager', pw: 'dsqkmanager', venue: 'DSQK', role: 'manager' },
-            { id: 'gjstaff', pw: 'gjstaff', venue: 'GJ', role: 'staff' },
-            { id: 'gjmanager', pw: 'gjmanager', venue: 'GJ', role: 'manager' },
-            { id: 'ckstaff', pw: 'ckstaff', venue: 'CK', role: 'staff' },
-            { id: 'ckmanager', pw: 'ckmanager', venue: 'CK', role: 'manager' }
+            { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'venue' },
+            { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'venue' },
+            { id: 'wsqstaff', pw: 'wsqstaff', venue: 'WSQ', role: 'venue' },
+            { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'venue' },
+            { id: 'gjstaff', pw: 'gjstaff', venue: 'GJ', role: 'venue' },
+            { id: 'dsqkmanager', pw: 'dsqkmanager', venue: 'DSQK', role: 'kitchen' },
+            { id: 'ckmanager', pw: 'ckmanager', venue: 'CK', role: 'kitchen' }
         ];
 
         let _supabase;
+        let currentUser = null;
+        let activeProducts = [];
 
-        // Check if library and keys are working
         window.onload = function() {
-            const statusEl = document.getElementById('debug-status');
-            
             try {
-                if (typeof supabase === 'undefined') {
-                    statusEl.innerText = "Error: Supabase Library Not Found";
-                    statusEl.className = "text-[10px] text-center mb-4 text-red-500 font-mono bg-red-50 p-2 rounded";
-                    return;
-                }
-
                 _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-                statusEl.innerText = "System Ready: Database Connected";
-                statusEl.className = "text-[10px] text-center mb-4 text-green-500 font-mono bg-green-50 p-2 rounded";
-
-                // Attach button click
-                document.getElementById('login-btn').addEventListener('click', function() {
-                    const u = document.getElementById('username').value.toLowerCase().trim();
-                    const p = document.getElementById('password').value.trim();
-                    
-                    const found = USERS.find(x => x.id === u && x.pw === p);
-
-                    if (found) {
-                        document.getElementById('login-card').classList.add('hidden');
-                        document.getElementById('dashboard').classList.remove('hidden');
-                        document.getElementById('welcome-msg').innerText = "Venue: " + found.venue;
-                    } else {
-                        alert("Invalid ID or Password");
-                    }
-                });
-
-            } catch (err) {
-                statusEl.innerText = "Error: " + err.message;
+                document.getElementById('login-btn').onclick = handleLogin;
+                document.getElementById('submit-btn').onclick = submitOrder;
+                document.getElementById('supplier-select').onchange = loadProducts;
+            } catch (e) {
+                console.error("Initialization Failed", e);
             }
         };
+
+        function handleLogin() {
+            const u = document.getElementById('username').value.toLowerCase().trim();
+            const p = document.getElementById('password').value.trim();
+            const found = USERS.find(x => x.id === u && x.pw === p);
+
+            if (found) {
+                currentUser = found;
+                document.getElementById('login-card').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                document.getElementById('welcome-msg').innerText = "Venue: " + found.venue;
+                document.getElementById('user-role-display').innerText = found.role + " access";
+                loadProducts();
+                loadHistory();
+            } else {
+                alert("Login Failed. Please check your credentials.");
+            }
+        }
+
+        async function loadProducts() {
+            const supplier = document.getElementById('supplier-select').value;
+            const container = document.getElementById('product-list');
+            container.innerHTML = `<div class="p-10 text-center text-slate-400 text-xs animate-pulse">Fetching ${supplier} Items...</div>`;
+
+            const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
+            
+            if (data) {
+                activeProducts = data;
+                container.innerHTML = "";
+                data.forEach(prod => {
+                    // Check restrictions
+                    if (prod.restricted_to && !prod.restricted_to.includes(currentUser.venue)) return;
+                    
+                    const div = document.createElement('div');
+                    div.className = "flex items-center justify-between p-4 border border-slate-50 rounded-xl mb-1 bg-slate-50/50";
+                    div.innerHTML = `
+                        <div class="text-left">
+                            <p class="text-sm font-bold text-slate-800 uppercase">${prod.name}</p>
+                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">${prod.unit} ${prod.lead_time > 1 ? `<span class="text-orange-600 bg-orange-50 px-1 ml-1 rounded">(${prod.lead_time}d Lead)</span>` : ''}</p>
+                        </div>
+                        <input type="number" id="qty-${prod.id}" min="0" placeholder="0" class="w-16 p-2 bg-white border border-slate-200 rounded-lg text-center font-bold text-blue-600 outline-none">
+                    `;
+                    container.appendChild(div);
+                });
+            }
+        }
+
+        async function loadHistory() {
+            const container = document.getElementById('history-container');
+            // Showing history for ALL venues
+            const { data } = await _supabase.from('orders')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(10);
+
+            if (data && data.length > 0) {
+                container.innerHTML = data.map(o => `
+                    <div class="p-3 bg-slate-50 rounded-xl text-[11px] border border-slate-100 text-left shadow-sm">
+                        <div class="flex justify-between font-black mb-1 uppercase tracking-tighter italic">
+                            <span class="text-blue-600">FROM: ${o.venue_id}</span>
+                            <span class="text-slate-400">DELIVERY: ${o.delivery_date} (${o.delivery_slot})</span>
+                        </div>
+                        <div class="text-slate-800">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</div>
+                    </div>
+                `).join('');
+            } else {
+                container.innerHTML = '<p class="text-center text-slate-300 text-[10px] py-4 italic uppercase font-bold">No global activity yet.</p>';
+            }
+        }
+
+        async function submitOrder() {
+            const dateStr = document.getElementById('delivery-date').value;
+            if (!dateStr) return alert("Select a delivery date");
+
+            const now = new Date();
+            const selectedDate = new Date(dateStr);
+            selectedDate.setHours(0,0,0,0);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+
+            // KITCHEN role (DSQK, CK) can bypass restrictions
+            const isKitchenAdmin = (currentUser.role === 'kitchen');
+
+            if (selectedDate <= today && !isKitchenAdmin) {
+                return alert("Order time has passed. Please contact the kitchen directly to request an edit.");
+            }
+
+            if (selectedDate.getTime() === tomorrow.getTime() && now.getHours() >= 13 && !isKitchenAdmin) {
+                return alert("Past 1:00 PM cutoff for tomorrow. Please leave a comment or call for manual entry.");
+            }
+
+            const orderItems = [];
+            let ltViolation = false;
+            activeProducts.forEach(p => {
+                const el = document.getElementById(`qty-${p.id}`);
+                const q = el ? (parseInt(el.value) || 0) : 0;
+                if (q > 0) {
+                    const minDate = new Date(today);
+                    minDate.setDate(today.getDate() + (p.lead_time || 1));
+                    if (selectedDate < minDate && !isKitchenAdmin) {
+                        alert(`ITEM ERROR: "${p.name}" requires ${p.lead_time} days lead time.`);
+                        ltViolation = true;
+                    }
+                    orderItems.push({ name: p.name, quantity: q, unit: p.unit });
+                }
+            });
+
+            if (ltViolation || orderItems.length === 0) return;
+
+            const { error } = await _supabase.from('orders').insert([{
+                venue_id: currentUser.venue,
+                delivery_date: dateStr,
+                delivery_slot: document.getElementById('delivery-slot').value,
+                items: orderItems,
+                status: 'submitted'
+            }]);
+
+            if (!error) {
+                alert("Order successfully placed!");
+                loadHistory();
+            } else {
+                alert("Submission error: " + error.message);
+            }
+        }
     </script>
 </body>
 </html>
