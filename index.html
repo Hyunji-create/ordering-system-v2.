@@ -1,14 +1,67 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Internal Ordering</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Internal Ordering V2</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-gray-100 p-8">
-    <div id="app" class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-lg text-center">
-        <h1 class="text-2xl font-bold">V2 is Online</h1>
-        <p class="text-gray-600">If you see this, we are officially starting fresh!</p>
-        <button onclick="alert('It works!')" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded">Test Me</button>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4">
+
+    <div id="login-card" class="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl">
+        <h1 class="text-2xl font-bold text-center text-slate-800 mb-2">Internal Ordering</h1>
+        <p class="text-center text-slate-500 mb-8 text-sm">Please log in with your Venue ID</p>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-semibold mb-1">User ID</label>
+                <input id="username" type="text" placeholder="e.g. wynstaff" class="w-full p-3 border rounded-lg outline-blue-500">
+            </div>
+            <div>
+                <label class="block text-sm font-semibold mb-1">Password</label>
+                <input id="password" type="password" placeholder="••••••••" class="w-full p-3 border rounded-lg outline-blue-500">
+            </div>
+            <button onclick="handleLogin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition">
+                Sign In
+            </button>
+        </div>
     </div>
+
+    <div id="dashboard" class="hidden w-full max-w-4xl bg-white p-8 rounded-2xl shadow-xl text-center">
+        <h1 id="welcome-msg" class="text-3xl font-bold text-slate-800 mb-4">Welcome</h1>
+        <p class="text-slate-600 mb-8">You are successfully logged into the new system.</p>
+        <button onclick="location.reload()" class="text-red-500 font-bold">Logout</button>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        // PASTE YOUR SUPABASE LINKS HERE:
+        const SUPABASE_URL = 'YOUR_PROJECT_URL_HERE';
+        const SUPABASE_KEY = 'YOUR_ANON_KEY_HERE';
+        
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const USERS = [
+            { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'staff' },
+            { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'staff' },
+            { id: 'kitchenmanager', pw: 'kitchenmanager', venue: 'CK', role: 'manager' }
+        ];
+
+        function handleLogin() {
+            const userInp = document.getElementById('username').value;
+            const passInp = document.getElementById('password').value;
+
+            const found = USERS.find(u => u.id === userInp && u.pw === passInp);
+
+            if (found) {
+                document.getElementById('login-card').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                document.getElementById('welcome-msg').innerText = "Welcome, " + found.venue;
+            } else {
+                alert("Invalid Login ID or Password");
+            }
+        }
+    </script>
 </body>
 </html>
