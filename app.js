@@ -61,12 +61,6 @@ window.switchTab = function(view) {
 };
 
 // PRODUCT LOADING
-async function populateSuppliers() {
-    const select = document.getElementById('supplier-select');
-    if(!select.innerHTML) select.innerHTML = `<option value="CK">CK</option><option value="DSQ">DSQ</option><option value="GJ">GJ</option>`;
-    loadProducts();
-}
-
 async function loadProducts() {
     const supplier = document.getElementById('supplier-select').value;
     const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
@@ -75,9 +69,11 @@ async function loadProducts() {
         const list = document.getElementById('product-list');
         const drop = document.getElementById('standing-item');
         list.innerHTML = ""; drop.innerHTML = `<option value="">-- ITEM --</option>`;
+        
         activeProducts.forEach(p => {
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
             if (p.restricted_to && !allowed.includes(currentUser.venue)) return;
+            
             list.innerHTML += `
                 <div class="item-row py-4 border-b">
                     <div class="flex justify-between items-center px-2">
@@ -85,7 +81,19 @@ async function loadProducts() {
                             <p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p>
                             <button onclick="toggleNote('${p.name}')" class="text-[9px] font-black text-blue-500 uppercase mt-1">📝 Note</button>
                         </div>
-                        <input type="number" oninput="validateChanges()" data-name="${p.name}" value="0" class="w-16 p-3 bg-slate-50 border-2 rounded-xl text-center font-black text-blue-600 outline-none">
+                        
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="adjustQty('${p.name}', -1)" class="qty-btn">-</button>
+                            <input type="number" 
+                                   id="qty-${p.name}"
+                                   oninput="validateChanges()" 
+                                   data-name="${p.name}" 
+                                   value="0" 
+                                   inputmode="numeric" 
+                                   pattern="[0-9]*"
+                                   class="w-12 h-11 bg-white border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
+                            <button type="button" onclick="adjustQty('${p.name}', 1)" class="qty-btn">+</button>
+                        </div>
                     </div>
                     <input type="text" id="note-${p.name}" oninput="validateChanges()" placeholder="Note for ${p.name}..." class="note-input">
                 </div>`;
