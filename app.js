@@ -1,14 +1,14 @@
 // app.js - Orchestrator
-let _supabase, currentDBOrder = null;
-let allStandingOrders = [];
-let activeProducts = [];
-let originalKitchenVenue = ""; 
+window.currentDBOrder = null;
+window.allStandingOrders = [];
+window.activeProducts = [];
+window.originalKitchenVenue = ""; 
 
 window.onload = function() {
     const savedUser = localStorage.getItem('kitchen_portal_user');
     if (savedUser) {
         window.currentUser = JSON.parse(savedUser);
-        if (window.currentUser.role === 'kitchen') originalKitchenVenue = window.currentUser.venue;
+        if (window.currentUser.role === 'kitchen') window.originalKitchenVenue = window.currentUser.venue;
         window.showDashboard();
     }
 };
@@ -20,28 +20,19 @@ window.handleLogin = function() {
     if (found) {
         window.currentUser = JSON.parse(JSON.stringify(found));
         localStorage.setItem('kitchen_portal_user', JSON.stringify(window.currentUser));
-        if (found.role === 'kitchen') originalKitchenVenue = found.venue;
+        if (found.role === 'kitchen') window.originalKitchenVenue = found.venue;
         window.showDashboard();
-    } else alert("Login Failed");
+    } else alert("Failed");
 };
 
-function startApp() {
-    _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    
-    // Safety check: ensure functions exist before calling
-    if (window.setTomorrowDate) window.setTomorrowDate();
-    if (window.populateSuppliers) window.populateSuppliers();
-    
+window.startApp = function() {
+    window.setTomorrowDate();
+    window.populateSuppliers ? window.populateSuppliers() : null;
     window.loadStandingOrders();
 }
 
 window.loadStandingOrders = async function() {
-    const { data } = await _supabase.from('standing_orders').select('*');
-    allStandingOrders = data || [];
+    const { data } = await window._supabase.from('standing_orders').select('*');
+    window.allStandingOrders = data || [];
     if (window.applyStandingToDaily) window.applyStandingToDaily();
-};
-
-window.handleLogout = function() {
-    localStorage.removeItem('kitchen_portal_user');
-    location.reload();
 };
