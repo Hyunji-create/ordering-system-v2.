@@ -11,16 +11,13 @@
         .tab-active { background-color: #1e40af !important; color: white !important; border-bottom: 6px solid #fbbf24; }
         .day-active { background-color: #fbbf24 !important; color: black !important; border-color: #b45309 !important; transform: scale(0.95); }
         .edit-input { width: 50px; padding: 4px; border: 2px solid #3b82f6; border-radius: 8px; text-align: center; font-weight: bold; }
+        .auto-filled { background-color: #f0f9ff !important; border-color: #7dd3fc !important; }
     </style>
 </head>
 <body class="bg-slate-200 min-h-screen p-2 font-sans text-slate-900 text-center">
 
     <script>
-        const PRODUCT_ORDER = [
-            "Matcha", "Hojicha", "Strawberry Puree", "Chia Pudding", 
-            "Mango Puree", "Vanilla Syrup", "Simple Syrup", "Ice"
-        ];
-
+        const PRODUCT_ORDER = ["Matcha", "Hojicha", "Strawberry Puree", "Chia Pudding", "Mango Puree", "Vanilla Syrup", "Simple Syrup", "Ice"];
         const USERS = [
             { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'venue' },
             { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'venue' },
@@ -32,7 +29,6 @@
         ];
 
         let _supabase;
-
         window.handleLogin = function() {
             const u = document.getElementById('username').value.toLowerCase().trim();
             const p = document.getElementById('password').value.trim();
@@ -51,27 +47,22 @@
             const nameB = b.name || b.item_name || "";
             let indexA = PRODUCT_ORDER.indexOf(nameA);
             let indexB = PRODUCT_ORDER.indexOf(nameB);
-            if (indexA === -1) indexA = 999;
-            if (indexB === -1) indexB = 999;
-            return indexA - indexB;
+            return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
         }
     </script>
 
     <div id="login-card" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-3xl shadow-2xl">
         <h1 class="text-3xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Kitchen Portal</h1>
-        <p class="text-blue-600 font-bold text-[10px] tracking-widest mb-8 uppercase text-center">Internal Operations</p>
         <div class="space-y-4">
-            <input id="username" type="text" placeholder="USER ID" class="w-full p-4 border-2 rounded-2xl uppercase text-center font-bold outline-none border-slate-200">
-            <input id="password" type="password" placeholder="PASSWORD" class="w-full p-4 border-2 rounded-2xl text-center font-bold outline-none border-slate-200">
-            <button onclick="window.handleLogin()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-lg uppercase tracking-widest">Sign In</button>
+            <input id="username" type="text" placeholder="USER ID" class="w-full p-4 border-2 rounded-2xl uppercase text-center font-bold">
+            <input id="password" type="password" placeholder="PASSWORD" class="w-full p-4 border-2 rounded-2xl text-center font-bold">
+            <button onclick="window.handleLogin()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-lg uppercase tracking-widest text-lg">Sign In</button>
         </div>
     </div>
 
     <div id="dashboard" class="hidden max-w-2xl mx-auto space-y-4">
         <div class="bg-white p-5 rounded-3xl shadow-sm flex justify-between items-center border-b-4 border-blue-600 text-left">
-            <div>
-                <h1 id="welcome-msg" class="text-2xl font-black text-blue-900 uppercase italic leading-none">VENUE</h1>
-            </div>
+            <h1 id="welcome-msg" class="text-2xl font-black text-blue-900 uppercase italic">VENUE</h1>
             <button onclick="location.reload()" class="bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-bold border uppercase">Logout</button>
         </div>
 
@@ -82,28 +73,28 @@
 
         <div id="view-daily" class="space-y-4">
             <div id="summary-section" class="bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
-                <p class="text-[10px] font-black uppercase mb-4 text-blue-400 tracking-widest">Master Order Summary</p>
                 <div class="flex gap-2">
-                    <input id="admin-view-date" type="date" class="flex-1 p-3 rounded-xl text-slate-900 font-bold outline-none">
+                    <input id="admin-view-date" type="date" class="flex-1 p-3 rounded-xl text-slate-900 font-bold">
                     <button onclick="generateConsolidatedReport()" class="bg-blue-600 px-6 py-3 rounded-xl font-black text-[10px] uppercase">View List</button>
                 </div>
                 <div id="consolidated-results" class="hidden mt-4 bg-white text-slate-900 p-6 rounded-2xl max-h-[500px] overflow-auto text-left shadow-inner"></div>
             </div>
 
             <div class="bg-white p-6 rounded-3xl shadow-lg space-y-6">
-                <button onclick="applyStandingToDaily()" class="w-full bg-blue-100 text-blue-700 font-black py-3 rounded-2xl border-2 border-blue-200 uppercase text-[10px] tracking-widest">
-                    ⚡ Sync My Standing Orders
-                </button>
+                <div class="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                    <p class="text-[10px] font-black uppercase text-blue-600 tracking-widest">⚡ Auto-filling from your Schedule</p>
+                </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <select id="supplier-select" onchange="loadProducts()" class="p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs outline-none"></select>
-                    <input id="delivery-date" type="date" class="p-4 bg-slate-50 border rounded-2xl font-bold text-center outline-none">
-                    <select id="delivery-slot" class="p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs outline-none">
+                    <select id="supplier-select" onchange="loadProducts()" class="p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs"></select>
+                    <input id="delivery-date" type="date" onchange="applyStandingToDaily(true)" class="p-4 bg-slate-50 border rounded-2xl font-bold text-center">
+                    <select id="delivery-slot" onchange="applyStandingToDaily(true)" class="p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs">
                         <option value="1st Delivery">1st Delivery</option>
                         <option value="2nd Delivery">2nd Delivery</option>
                     </select>
                 </div>
                 <div id="product-list" class="divide-y border-t text-left"></div>
-                <textarea id="order-comment" placeholder="Initial order note..." class="w-full p-4 bg-slate-50 border rounded-2xl text-sm" rows="2"></textarea>
+                <textarea id="order-comment" placeholder="Urgent note..." class="w-full p-4 bg-slate-50 border rounded-2xl text-sm" rows="2"></textarea>
                 <button onclick="submitOrder()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm">Submit Order</button>
             </div>
         </div>
@@ -120,9 +111,9 @@
                     <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Sun">SUN</button>
                 </div>
                 <div class="space-y-4 text-slate-900">
-                    <select id="standing-item" class="w-full p-4 rounded-2xl font-bold uppercase text-xs outline-none"></select>
+                    <select id="standing-item" class="w-full p-4 rounded-2xl font-bold uppercase text-xs"></select>
                     <div class="flex gap-2">
-                        <select id="standing-slot" class="flex-1 p-4 rounded-2xl font-bold uppercase text-xs outline-none">
+                        <select id="standing-slot" class="flex-1 p-4 rounded-2xl font-bold uppercase text-xs">
                             <option value="1st Delivery">1st Delivery</option>
                             <option value="2nd Delivery">2nd Delivery</option>
                         </select>
@@ -134,57 +125,74 @@
             <div id="standing-items-container" class="bg-white p-6 rounded-3xl shadow-md border border-slate-100 space-y-6"></div>
         </div>
 
-        <div class="bg-white p-6 rounded-3xl shadow-md border border-slate-100">
+        <div class="bg-white p-6 rounded-3xl shadow-md border border-slate-100 text-left">
             <p class="text-[10px] font-black text-slate-300 uppercase tracking-widest border-b pb-2 mb-4">My Activity Log</p>
-            <div id="history-container" class="space-y-2 text-left"></div>
+            <div id="history-container" class="space-y-2"></div>
         </div>
     </div>
 
     <script>
+        let allStandingOrders = [];
+        let activeProducts = [];
+
         function startApp() {
             _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
             setTomorrowDate();
             populateSuppliers();
             loadHistory();
-            loadStandingOrders();
+            loadStandingOrders(); // Loads then triggers auto-fill
         }
 
-        async function saveInPlaceEdit(orderId) {
-            const container = document.getElementById(`order-edit-box-${orderId}`);
-            const inputs = container.querySelectorAll('input');
-            const items = [];
-            inputs.forEach(inp => {
-                items.push({ name: inp.dataset.name, quantity: parseInt(inp.value) || 0, unit: "unit" });
+        async function loadStandingOrders() {
+            const { data } = await _supabase.from('standing_orders').select('*').eq('venue_id', currentUser.venue);
+            allStandingOrders = data || [];
+            renderStandingList();
+            applyStandingToDaily(false); // AUTO-FILL on start
+        }
+
+        function applyStandingToDaily(isManualChange) {
+            const dateStr = document.getElementById('delivery-date').value;
+            const selectedSlot = document.getElementById('delivery-slot').value;
+            const d = new Date(dateStr + "T00:00:00");
+            const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            const targetDay = dayNames[d.getDay()];
+
+            // Filter relevant standings
+            const matches = allStandingOrders.filter(s => s.days_of_week.includes(targetDay) && s.delivery_slot === selectedSlot);
+            
+            // Clear current form inputs
+            document.querySelectorAll('#product-list input').forEach(inp => {
+                inp.value = "";
+                inp.classList.remove('auto-filled');
             });
-            const { error } = await _supabase.from('orders').update({ items }).eq('id', orderId);
-            if (!error) { alert("Order Updated!"); loadHistory(); }
-        }
 
-        async function showInPlaceEdit(orderId) {
-            const { data: order } = await _supabase.from('orders').select('*').eq('id', orderId).single();
-            const container = document.getElementById(`order-content-${orderId}`);
-            let html = `<div id="order-edit-box-${orderId}" class="mt-2 space-y-1 bg-blue-50 p-3 rounded-xl border border-blue-200">`;
-            PRODUCT_ORDER.forEach(prodName => {
-                const existing = order.items.find(i => i.name === prodName);
-                const qty = existing ? existing.quantity : 0;
-                html += `
-                    <div class="flex justify-between items-center text-[11px] font-bold">
-                        <span>${prodName}</span>
-                        <input type="number" class="edit-input" data-name="${prodName}" value="${qty}">
-                    </div>`;
+            // Fill matches
+            matches.forEach(s => {
+                const input = Array.from(document.querySelectorAll('#product-list input')).find(i => i.dataset.name === s.item_name);
+                if (input) {
+                    input.value = s.quantity;
+                    input.classList.add('auto-filled');
+                }
             });
-            html += `<div class="flex gap-2 mt-3">
-                <button onclick="loadHistory()" class="flex-1 bg-slate-300 text-slate-700 py-2 rounded-lg font-black text-[10px] uppercase">Cancel</button>
-                <button onclick="saveInPlaceEdit(${orderId})" class="flex-2 bg-blue-600 text-white py-2 px-4 rounded-lg font-black text-[10px] uppercase">Save Changes</button>
-            </div></div>`;
-            container.innerHTML = html;
+            if(isManualChange && matches.length > 0) console.log("Form updated for new date/slot selection.");
         }
 
-        async function updateComment(orderId) {
-            const newComment = prompt("Add/Update Note for Kitchen:");
-            if (newComment !== null) {
-                const { error } = await _supabase.from('orders').update({ comment: newComment }).eq('id', orderId);
-                if (!error) { alert("Note Updated!"); loadHistory(); }
+        async function loadProducts() {
+            const supplier = document.getElementById('supplier-select').value;
+            const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
+            if (data) {
+                activeProducts = data.sort(sortItemsByCustomOrder);
+                const list = document.getElementById('product-list');
+                const drop = document.getElementById('standing-item');
+                list.innerHTML = "";
+                drop.innerHTML = `<option value="">-- ITEM --</option>`;
+                activeProducts.forEach(p => {
+                    const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
+                    if (p.restricted_to && !allowed.includes(currentUser.venue)) return;
+                    list.innerHTML += `<div class="flex justify-between items-center py-4"><div class="text-left"><p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p><p class="text-[10px] text-slate-400 mt-1 uppercase font-bold">${p.unit}</p></div><input type="number" data-name="${p.name}" data-unit="${p.unit}" placeholder="0" class="w-16 p-3 bg-slate-50 border-2 rounded-xl text-center font-black text-blue-600 outline-none"></div>`;
+                    drop.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+                });
+                applyStandingToDaily(false); // Re-fill quantities into new product list
             }
         }
 
@@ -198,7 +206,28 @@
             if(items.length === 0) return alert("Enter quantities.");
             const payload = { venue_id: currentUser.venue, delivery_date: dateStr, delivery_slot: document.getElementById('delivery-slot').value, items, comment: document.getElementById('order-comment').value };
             const { error } = await _supabase.from('orders').insert([payload]);
-            if(!error) { alert("Order Sent!"); loadHistory(); document.querySelectorAll('#product-list input').forEach(i=>i.value=""); document.getElementById('order-comment').value = ""; }
+            if(!error) { alert("Final Order Sent!"); loadHistory(); }
+        }
+
+        async function saveInPlaceEdit(orderId) {
+            const container = document.getElementById(`order-edit-box-${orderId}`);
+            const inputs = container.querySelectorAll('input');
+            const items = [];
+            inputs.forEach(inp => items.push({ name: inp.dataset.name, quantity: parseInt(inp.value) || 0, unit: "unit" }));
+            const { error } = await _supabase.from('orders').update({ items }).eq('id', orderId);
+            if (!error) { alert("Updated!"); loadHistory(); }
+        }
+
+        async function showInPlaceEdit(orderId) {
+            const { data: order } = await _supabase.from('orders').select('*').eq('id', orderId).single();
+            const container = document.getElementById(`order-content-${orderId}`);
+            let html = `<div id="order-edit-box-${orderId}" class="mt-2 space-y-1 bg-blue-50 p-3 rounded-xl border border-blue-200">`;
+            PRODUCT_ORDER.forEach(prodName => {
+                const existing = order.items.find(i => i.name === prodName);
+                html += `<div class="flex justify-between items-center text-[11px] font-bold"><span>${prodName}</span><input type="number" class="edit-input" data-name="${prodName}" value="${existing?existing.quantity:0}"></div>`;
+            });
+            html += `<div class="flex gap-2 mt-3"><button onclick="loadHistory()" class="flex-1 bg-slate-300 py-2 rounded-lg font-black text-[10px] uppercase">Cancel</button><button onclick="saveInPlaceEdit(${orderId})" class="flex-2 bg-blue-600 text-white py-2 px-4 rounded-lg font-black text-[10px] uppercase">Save</button></div></div>`;
+            container.innerHTML = html;
         }
 
         async function generateConsolidatedReport() {
@@ -206,13 +235,12 @@
             const d = new Date(dateStr + "T00:00:00");
             const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
             const res = document.getElementById('consolidated-results');
-            res.innerHTML = "CALCULATING..."; res.classList.remove('hidden');
+            res.innerHTML = "LOADING..."; res.classList.remove('hidden');
 
             const { data: oneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', dateStr);
             const { data: standings } = await _supabase.from('standing_orders').select('*');
             const venueReport = {};
-            const VENUES = ["WYN", "MCC", "WSQ", "DSQ", "GJ"];
-            VENUES.forEach(v => venueReport[v] = { "1st Delivery": [], "2nd Delivery": [], note: "" });
+            ["WYN", "MCC", "WSQ", "DSQ", "GJ"].forEach(v => venueReport[v] = { "1st Delivery": [], "2nd Delivery": [], note: "" });
 
             (standings || []).forEach(s => {
                 if(s.days_of_week.includes(targetDay)) venueReport[s.venue_id][s.delivery_slot].push({ name: s.item_name, qty: s.quantity });
@@ -223,7 +251,7 @@
             });
 
             let html = `<div class="flex justify-between border-b pb-2 mb-4 font-black uppercase text-[10px] text-blue-900"><span>Loading Plan (${dateStr})</span><button onclick="window.print()" class="underline">Print</button></div>`;
-            VENUES.forEach(v => {
+            Object.keys(venueReport).forEach(v => {
                 const vData = venueReport[v];
                 if(vData["1st Delivery"].length > 0 || vData["2nd Delivery"].length > 0) {
                     html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-slate-50 border-slate-100"><h3 class="font-black text-blue-800 text-lg border-b pb-1 mb-3 italic">${v}</h3>`;
@@ -243,115 +271,80 @@
         }
 
         async function loadHistory() {
-            const { data } = await _supabase.from('orders').select('*').eq('venue_id', currentUser.venue).order('created_at', { ascending: false }).limit(15);
+            const { data } = await _supabase.from('orders').select('*').eq('venue_id', currentUser.venue).order('created_at', { ascending: false }).limit(10);
             if(data) document.getElementById('history-container').innerHTML = data.map(o => {
-                const now = new Date();
                 const orderDate = new Date(o.delivery_date + "T00:00:00");
                 const today = new Date(); today.setHours(0,0,0,0);
                 const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+                let canEdit = (orderDate > today || (orderDate.getTime() === today.getTime() && new Date().getHours() < 13));
+                if (orderDate.getTime() === tomorrow.getTime() && new Date().getHours() >= 13) canEdit = false;
 
-                // --- THE UPDATED CUT-OFF RULE ---
-                let canEdit = true;
-                // Rule 1: If order is for Tomorrow, hide if past 1pm Today
-                if (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13) canEdit = false;
-                // Rule 2: If order is for Today, hide (Past cut-off)
-                if (orderDate.getTime() === today.getTime()) canEdit = false;
-                // Rule 3: If order is in the past, hide
-                if (orderDate < today) canEdit = false;
-
-                return `
-                <div class="p-4 bg-slate-50 rounded-2xl border mb-2 shadow-sm border-slate-100">
-                    <div class="flex justify-between mb-1 uppercase text-blue-600 font-black text-[10px]"><span>${o.delivery_slot}</span><span>${o.delivery_date}</span></div>
-                    <div id="order-content-${o.id}"><p class="text-slate-800 text-xs font-bold">${o.items.filter(i => i.quantity > 0).map(i => `${i.name} (x${i.quantity})`).join(', ')}</p></div>
-                    ${o.comment ? `<p class="mt-2 text-[10px] text-red-600 italic font-bold">NOTE: ${o.comment}</p>` : ''}
-                    <div class="flex gap-2 mt-3">
-                        ${canEdit ? `<button onclick="showInPlaceEdit(${o.id})" class="flex-1 bg-orange-500 text-white py-2 rounded-xl uppercase text-[9px] font-black">Edit Order</button>` : ''}
-                        <button onclick="updateComment(${o.id})" class="flex-1 bg-slate-700 text-white py-2 rounded-xl uppercase text-[9px] font-black">Update Note</button>
-                    </div>
-                </div>`;
+                return `<div class="p-4 bg-slate-50 rounded-2xl border mb-2 shadow-sm border-slate-100 text-left"><div class="flex justify-between mb-1 uppercase text-blue-600 font-black text-[10px]"><span>${o.delivery_slot}</span><span>${o.delivery_date}</span></div><div id="order-content-${o.id}"><p class="text-slate-800 text-xs font-bold">${o.items.filter(i => i.quantity > 0).map(i => `${i.name} (x${i.quantity})`).join(', ')}</p></div>${o.comment ? `<p class="mt-2 text-[10px] text-red-600 italic font-bold">NOTE: ${o.comment}</p>` : ''}<div class="flex gap-2 mt-3">${canEdit ? `<button onclick="showInPlaceEdit(${o.id})" class="flex-1 bg-orange-500 text-white py-2 rounded-xl uppercase text-[9px] font-black">Edit</button>` : ''}<button onclick="updateComment(${o.id})" class="flex-1 bg-slate-700 text-white py-2 rounded-xl uppercase text-[9px] font-black">Add Note</button></div></div>`;
             }).join('');
         }
 
-        // Supporting UI functions
         function setTomorrowDate() {
             const tom = new Date(); tom.setDate(tom.getDate() + 1);
-            document.getElementById('delivery-date').value = tom.toISOString().split('T')[0];
-            document.getElementById('admin-view-date').value = tom.toISOString().split('T')[0];
+            const iso = tom.toISOString().split('T')[0];
+            document.getElementById('delivery-date').value = iso;
+            document.getElementById('admin-view-date').value = iso;
         }
+
         function switchTab(view) {
             document.getElementById('view-daily').classList.toggle('hidden', view !== 'daily');
             document.getElementById('view-standing').classList.toggle('hidden', view !== 'standing');
             document.getElementById('tab-daily').className = view === 'daily' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
             document.getElementById('tab-standing').className = view === 'standing' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
         }
+
         function populateSuppliers() {
             document.getElementById('supplier-select').innerHTML = `<option value="CK">CK</option><option value="DSQ">DSQ</option><option value="GJ">GJ</option>`;
             loadProducts();
         }
-        async function loadProducts() {
-            const supplier = document.getElementById('supplier-select').value;
-            const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
-            if (data) {
-                activeProducts = data.sort(sortItemsByCustomOrder);
-                const list = document.getElementById('product-list');
-                const drop = document.getElementById('standing-item');
-                list.innerHTML = "";
-                if(drop.innerHTML === "") drop.innerHTML = `<option value="">-- ITEM --</option>`;
-                activeProducts.forEach(p => {
-                    const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
-                    if (p.restricted_to && !allowed.includes(currentUser.venue)) return;
-                    list.innerHTML += `<div class="flex justify-between items-center py-4"><div class="text-left"><p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p><p class="text-[10px] text-slate-400 mt-1 uppercase font-bold text-blue-500">${p.unit}</p></div><input type="number" data-name="${p.name}" data-unit="${p.unit}" placeholder="0" class="w-16 p-3 bg-slate-50 border-2 rounded-xl text-center font-black text-blue-600 outline-none"></div>`;
-                    if (!Array.from(drop.options).some(o => o.value === p.name)) drop.innerHTML += `<option value="${p.name}">${p.name}</option>`;
-                });
-            }
-        }
+
         function toggleDay(btn) { btn.classList.toggle('day-active'); }
+
         async function addStandingOrder() {
             const item = document.getElementById('standing-item').value;
             const slot = document.getElementById('standing-slot').value;
             const qty = parseInt(document.getElementById('standing-qty').value);
             const days = Array.from(document.querySelectorAll('.day-active')).map(b => b.dataset.day);
-            if (!item || !qty || days.length === 0) return alert("Select Day, Item and Qty.");
-            const { error } = await _supabase.from('standing_orders').insert([{ venue_id: currentUser.venue, item_name: item, quantity: qty, delivery_slot: slot, days_of_week: days.join(', ') }]);
-            if (!error) { alert("Schedule Updated!"); loadStandingOrders(); }
+            if (!item || !qty || days.length === 0) return alert("Fill all info.");
+            await _supabase.from('standing_orders').insert([{ venue_id: currentUser.venue, item_name: item, quantity: qty, delivery_slot: slot, days_of_week: days.join(', ') }]);
+            alert("Added!"); loadStandingOrders();
         }
-        async function loadStandingOrders() {
-            const { data } = await _supabase.from('standing_orders').select('*').eq('venue_id', currentUser.venue);
-            allStandingOrders = data || [];
+
+        function renderStandingList() {
             const cont = document.getElementById('standing-items-container');
             cont.innerHTML = "";
             ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach(day => {
                 const dayOrders = allStandingOrders.filter(s => s.days_of_week.includes(day));
                 if (dayOrders.length > 0) {
-                    let dayHtml = `<div class="mb-4 text-left"><h4 class="text-[11px] font-black text-blue-600 uppercase border-b mb-2 pb-1">${day}</h4><div class="space-y-4">`;
+                    let dayHtml = `<div class="mb-4 text-left"><h4 class="text-[11px] font-black text-blue-600 uppercase border-b mb-2 pb-1">${day}</h4>`;
                     ["1st Delivery", "2nd Delivery"].forEach(slot => {
                         const slotOrders = dayOrders.filter(o => o.delivery_slot === slot).sort(sortItemsByCustomOrder);
                         if (slotOrders.length > 0) {
                             dayHtml += `<div class="pl-2 border-l-2 mb-2 border-slate-200"><p class="text-[9px] font-bold text-slate-400 uppercase italic mb-1">${slot}</p>`;
-                            slotOrders.forEach(s => dayHtml += `<div class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border mb-1"><div><p class="font-bold text-slate-800 text-[12px] uppercase">${s.item_name} x${s.quantity}</p></div><button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase hover:underline">Delete</button></div>`);
+                            slotOrders.forEach(s => dayHtml += `<div class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border mb-1"><div><p class="font-bold text-slate-800 text-[12px] uppercase">${s.item_name} x${s.quantity}</p></div><button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase">Delete</button></div>`);
                             dayHtml += `</div>`;
                         }
                     });
-                    dayHtml += `</div></div>`;
+                    dayHtml += `</div>`;
                     cont.innerHTML += dayHtml;
                 }
             });
         }
+
         async function deleteStanding(id) {
             if(confirm("Remove?")) { await _supabase.from('standing_orders').delete().eq('id', id); loadStandingOrders(); }
         }
-        async function applyStandingToDaily() {
-            const dateStr = document.getElementById('delivery-date').value;
-            const selectedSlot = document.getElementById('delivery-slot').value;
-            const d = new Date(dateStr + "T00:00:00");
-            const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
-            const matches = allStandingOrders.filter(s => s.days_of_week.includes(targetDay) && s.delivery_slot === selectedSlot);
-            if (matches.length === 0) return alert("No standing orders found.");
-            document.querySelectorAll('#product-list input').forEach(inp => inp.value = "0");
-            matches.forEach(s => {
-                const input = Array.from(document.querySelectorAll('#product-list input')).find(i => i.dataset.name === s.item_name);
-                if (input) input.value = s.quantity;
-            });
+
+        async function updateComment(orderId) {
+            const newComment = prompt("Note for kitchen:");
+            if (newComment !== null) {
+                await _supabase.from('orders').update({ comment: newComment }).eq('id', orderId);
+                loadHistory();
+            }
         }
     </script>
 </body>
