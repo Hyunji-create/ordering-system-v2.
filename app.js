@@ -19,7 +19,6 @@ let originalKitchenVenue = "";
 
 // --- SESSION & PERSISTENCE ---
 window.onload = function() {
-    _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const savedUser = localStorage.getItem('kitchen_portal_user');
     if (savedUser) {
         window.currentUser = JSON.parse(savedUser);
@@ -48,24 +47,12 @@ window.handleLogout = function() {
 function showDashboard() {
     document.getElementById('login-card').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
-    // Set Header
-    updateHeader(window.currentUser.venue);
+    document.getElementById('welcome-msg').innerText = window.currentUser.venue;
     startApp();
-}
-
-function updateHeader(venueName, isOverride = false) {
-    const msg = document.getElementById('welcome-msg');
-    if (!msg) return;
-    if (isOverride) {
-        msg.innerHTML = `<span class="text-red-600 animate-pulse">●</span> MANAGING: ${venueName}`;
-    } else {
-        msg.innerHTML = `<span class="text-blue-600">●</span> ${venueName}`;
-    }
 }
 
 function updateOverrideIndicator(venueName, isOverride = false) {
     const indicator = document.getElementById('override-status-indicator');
-    if (!indicator) return;
     if (isOverride) {
         indicator.classList.remove('hidden');
         indicator.innerHTML = `
@@ -83,6 +70,7 @@ function updateOverrideIndicator(venueName, isOverride = false) {
 
 // --- CORE APP LOGIC ---
 function startApp() {
+    _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     setTomorrowDate();
     window.populateSuppliers();
     loadStandingOrders();
@@ -99,10 +87,8 @@ function sortItemsByCustomOrder(a, b) {
 function setTomorrowDate() {
     const tom = new Date(); tom.setDate(tom.getDate() + 1);
     const iso = tom.toISOString().split('T')[0];
-    const delDate = document.getElementById('delivery-date');
-    const admDate = document.getElementById('admin-view-date');
-    if(delDate) delDate.value = iso;
-    if(admDate) admDate.value = iso;
+    document.getElementById('delivery-date').value = iso;
+    document.getElementById('admin-view-date').value = iso;
 }
 
 window.switchTab = function(view) {
@@ -125,10 +111,7 @@ async function loadProducts() {
         activeProducts = data.sort(sortItemsByCustomOrder);
         const list = document.getElementById('product-list');
         const drop = document.getElementById('standing-item');
-        
-        if (list) list.innerHTML = ""; 
-        // FIX: Safety check for dropdown so it doesn't crash
-        if (drop) drop.innerHTML = `<option value="">-- ITEM --</option>`;
+        list.innerHTML = ""; drop.innerHTML = `<option value="">-- ITEM --</option>`;
         
         activeProducts.forEach(p => {
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
@@ -137,25 +120,23 @@ async function loadProducts() {
             const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
             const leadBadge = isLeadItem ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase tracking-tighter">⚠️ 2-Day Lead</span>` : "";
 
-            if (list) {
-                list.innerHTML += `
-                    <div class="item-row py-4 border-b">
-                        <div class="flex justify-between items-center px-2">
-                            <div class="text-left">
-                                <p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p>
-                                ${leadBadge}
-                                <button onclick="toggleNote('${p.name}')" class="text-[9px] font-black text-blue-500 uppercase mt-1">📝 Note</button>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <button type="button" onclick="adjustQty('${p.name}', -1)" class="qty-btn" data-item="${p.name}">-</button>
-                                <input type="number" id="qty-${p.name}" oninput="validateChanges()" data-name="${p.name}" value="0" inputmode="numeric" pattern="[0-9]*" class="w-12 h-11 bg-white border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
-                                <button type="button" onclick="adjustQty('${p.name}', 1)" class="qty-btn" data-item="${p.name}">+</button>
-                            </div>
+            list.innerHTML += `
+                <div class="item-row py-4 border-b">
+                    <div class="flex justify-between items-center px-2">
+                        <div class="text-left">
+                            <p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p>
+                            ${leadBadge}
+                            <button onclick="toggleNote('${p.name}')" class="text-[9px] font-black text-blue-500 uppercase mt-1">📝 Note</button>
                         </div>
-                        <input type="text" id="note-${p.name}" oninput="validateChanges()" placeholder="Note for ${p.name}..." class="note-input">
-                    </div>`;
-            }
-            if (drop) drop.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="adjustQty('${p.name}', -1)" class="qty-btn" data-item="${p.name}">-</button>
+                            <input type="number" id="qty-${p.name}" oninput="validateChanges()" data-name="${p.name}" value="0" inputmode="numeric" pattern="[0-9]*" class="w-12 h-11 bg-white border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
+                            <button type="button" onclick="adjustQty('${p.name}', 1)" class="qty-btn" data-item="${p.name}">+</button>
+                        </div>
+                    </div>
+                    <input type="text" id="note-${p.name}" oninput="validateChanges()" placeholder="Note for ${p.name}..." class="note-input">
+                </div>`;
+            drop.innerHTML += `<option value="${p.name}">${p.name}</option>`;
         });
         applyStandingToDaily();
     }
@@ -163,7 +144,7 @@ async function loadProducts() {
 
 window.toggleNote = function(name) {
     const el = document.getElementById(`note-${name}`);
-    if(el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
+    el.style.display = el.style.display === 'block' ? 'none' : 'block';
 };
 
 window.adjustQty = function(itemName, change) {
@@ -180,12 +161,11 @@ window.adjustQty = function(itemName, change) {
 function isItemLocked(itemName) {
     if (window.currentUser.role === 'kitchen') return false; 
     const dateStr = document.getElementById('delivery-date').value;
+    const now = new Date();
     const orderDate = new Date(dateStr + "T00:00:00");
     const today = new Date(); today.setHours(0,0,0,0);
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
     const dayAfter = new Date(today); dayAfter.setDate(today.getDate() + 2);
-    const now = new Date();
-
     if (orderDate <= today) return true;
     if (LEAD_2_DAY_ITEMS.includes(itemName)) {
         if (orderDate.getTime() === tomorrow.getTime()) return true;
@@ -199,19 +179,15 @@ function checkFormLock() {
     const dateStr = document.getElementById('delivery-date').value;
     const orderDate = new Date(dateStr + "T00:00:00");
     const today = new Date(); today.setHours(0,0,0,0);
-    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
     const now = new Date();
-    
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
     let totalLocked = (orderDate <= today) || (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
     const btn = document.getElementById('save-btn'), msg = document.getElementById('lock-msg');
-    
     if (totalLocked && window.currentUser.role !== 'kitchen') { 
-        if(btn) btn.classList.add('btn-disabled'); 
-        if(msg) msg.classList.remove('hidden'); 
+        btn.classList.add('btn-disabled'); msg.classList.remove('hidden'); 
     } else {
-        if(msg) msg.classList.add('hidden');
+        msg.classList.add('hidden');
     }
-    
     activeProducts.forEach(p => {
         const locked = isItemLocked(p.name);
         const input = document.getElementById(`qty-${p.name}`);
@@ -227,12 +203,11 @@ window.applyStandingToDaily = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr + "T00:00:00").getDay()];
-
     document.querySelectorAll('#product-list input[type="number"]').forEach(i => { i.value = "0"; i.classList.remove('auto-filled'); });
     document.querySelectorAll('.note-input').forEach(i => { i.value = ""; i.style.display = 'none'; });
-    const comm = document.getElementById('order-comment');
-    if(comm) comm.value = "";
+    document.getElementById('order-comment').value = "";
     
+    // VITAL FIX: Use the acting venue for the DB query
     const { data } = await _supabase.from('orders').select('*').eq('venue_id', window.currentUser.venue).eq('delivery_date', dateStr).eq('delivery_slot', slot).maybeSingle();
     currentDBOrder = data;
     
@@ -243,11 +218,11 @@ window.applyStandingToDaily = async function() {
                 inp.value = item.quantity;
                 if (item.comment) { 
                     const note = document.getElementById(`note-${item.name}`); 
-                    if(note) { note.value = item.comment; note.style.display = 'block'; }
+                    note.value = item.comment; note.style.display = 'block'; 
                 }
             }
         });
-        if(comm) comm.value = data.comment || "";
+        document.getElementById('order-comment').value = data.comment || "";
     } else {
         const matches = allStandingOrders.filter(s => s.venue_id === window.currentUser.venue && s.days_of_week.includes(targetDay) && s.delivery_slot === slot);
         matches.forEach(s => { const inp = document.getElementById(`qty-${s.item_name}`); if (inp) { inp.value = s.quantity; inp.classList.add('auto-filled'); } });
@@ -260,8 +235,7 @@ function captureState() {
     const state = [];
     document.querySelectorAll('#product-list input').forEach(i => state.push(i.value));
     document.querySelectorAll('.note-input').forEach(i => state.push(i.value));
-    const comm = document.getElementById('order-comment');
-    if(comm) state.push(comm.value);
+    state.push(document.getElementById('order-comment').value);
     initialFormState = JSON.stringify(state);
     validateChanges();
 }
@@ -270,11 +244,9 @@ window.validateChanges = function() {
     const state = [];
     document.querySelectorAll('#product-list input').forEach(i => state.push(i.value));
     document.querySelectorAll('.note-input').forEach(i => state.push(i.value));
-    const comm = document.getElementById('order-comment');
-    if(comm) state.push(comm.value);
+    state.push(document.getElementById('order-comment').value);
     const currentFormState = JSON.stringify(state);
     const btn = document.getElementById('save-btn');
-    if(!btn) return;
     btn.innerText = "Save Changes";
     if (currentFormState !== initialFormState) { 
         btn.classList.remove('btn-disabled'); 
@@ -290,11 +262,10 @@ window.submitOrder = async function() {
     const items = [];
     document.querySelectorAll('#product-list .item-row').forEach(row => {
         const inp = row.querySelector('input[type="number"]');
-        if(inp) {
-            items.push({ name: inp.dataset.name, quantity: parseInt(inp.value) || 0, comment: row.querySelector('.note-input').value });
-        }
+        items.push({ name: inp.dataset.name, quantity: parseInt(inp.value) || 0, comment: row.querySelector('.note-input').value });
     });
     
+    // VITAL FIX: Force the payload to use the acting venue
     const payload = { 
         venue_id: window.currentUser.venue, 
         delivery_date: dateStr, 
@@ -321,7 +292,6 @@ window.generateConsolidatedReport = async function() {
     const nextDateStr = nextDateObj.toISOString().split('T')[0];
     const nextDayName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][nextDateObj.getDay()];
     const res = document.getElementById('consolidated-results');
-    if(!res) return;
     res.innerHTML = "LOADING..."; res.classList.remove('hidden');
 
     try {
@@ -397,25 +367,27 @@ window.generateConsolidatedReport = async function() {
 };
 
 window.editVenueOrder = function(venueId, dateStr, slot) {
+    // 1. Force the current acting user to be the venue we want to adjust
     window.currentUser.venue = venueId;
-    updateHeader(venueId, true);
     updateOverrideIndicator(venueId, true);
     
+    // 2. Set the form values
     document.getElementById('delivery-date').value = dateStr;
     document.getElementById('delivery-slot').value = slot;
     
+    // 3. Switch tabs and load the specific data
     window.switchTab('daily');
+    
+    // VITAL FIX: Force a fresh product load and apply standing for the NEW venue
     loadProducts(); 
     
     setTimeout(() => {
-        const target = document.getElementById('override-status-indicator');
-        if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById('override-status-indicator').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 500);
 };
 
 window.resetToKitchen = function() {
     window.currentUser.venue = originalKitchenVenue;
-    updateHeader(originalKitchenVenue, false);
     updateOverrideIndicator(originalKitchenVenue, false);
     setTomorrowDate();
     loadProducts();
@@ -430,8 +402,7 @@ async function loadStandingOrders() {
 }
 
 function renderStandingList() {
-    const cont = document.getElementById('standing-items-container'); 
-    if(!cont) return;
+    const cont = document.getElementById('standing-items-container'); if(!cont) return;
     cont.innerHTML = "";
     const venueStandings = allStandingOrders.filter(s => s.venue_id === window.currentUser.venue);
     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach(day => {
