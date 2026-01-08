@@ -1,11 +1,17 @@
+/* Tab Styling */
 .tab-active { background-color: #1e40af !important; color: white !important; border-bottom: 6px solid #fbbf24; }
 .day-active { background-color: #fbbf24 !important; color: black !important; border-color: #b45309 !important; transform: scale(0.95); }
+
+/* Note Inputs */
 .note-input { font-size: 11px; padding: 6px; border-radius: 8px; border: 1px solid #e2e8f0; width: 100%; margin-top: 6px; display: none; background: #fffbeb; }
+
+/* Status Classes */
 .btn-disabled { background-color: #cbd5e1 !important; cursor: not-allowed; pointer-events: none; }
 .auto-filled { background-color: #f0f9ff !important; border-color: #7dd3fc !important; }
 .locked-qty { opacity: 0.6; pointer-events: none; background-color: #f1f5f9 !important; }
 .item-row:hover { background-color: #f8fafc; }
-/* Removes the default up/down arrows from the browser to make room for our custom ones */
+
+/* Custom Qty Adjustments & Mobile Keypad Fix */
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
     -webkit-appearance: none;
@@ -14,10 +20,9 @@ input::-webkit-inner-spin-button {
 
 input[type=number] {
     -moz-appearance: textfield;
-    inputmode: numeric; /* Triggers number-only keypad on most mobiles */
 }
 
-/* Style for our custom adjustment buttons */
+/* Big tap targets for mobile (+) and (-) */
 .qty-btn {
     width: 44px;
     height: 44px;
@@ -31,6 +36,7 @@ input[type=number] {
     font-size: 1.25rem;
     color: #1e40af;
     user-select: none;
+    cursor: pointer;
     -webkit-tap-highlight-color: transparent;
 }
 
