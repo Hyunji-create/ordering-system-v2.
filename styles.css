@@ -5,3 +5,36 @@
 .auto-filled { background-color: #f0f9ff !important; border-color: #7dd3fc !important; }
 .locked-qty { opacity: 0.6; pointer-events: none; background-color: #f1f5f9 !important; }
 .item-row:hover { background-color: #f8fafc; }
+/* Removes the default up/down arrows from the browser to make room for our custom ones */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type=number] {
+    -moz-appearance: textfield;
+    inputmode: numeric; /* Triggers number-only keypad on most mobiles */
+}
+
+/* Style for our custom adjustment buttons */
+.qty-btn {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f1f5f9;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-weight: 900;
+    font-size: 1.25rem;
+    color: #1e40af;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.qty-btn:active {
+    background-color: #e2e8f0;
+    transform: scale(0.95);
+}
