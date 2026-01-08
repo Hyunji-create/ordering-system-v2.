@@ -92,6 +92,10 @@
     </div>
 
     <script src="config.js"></script>
+    <script>
+        // Create the global Supabase client IMMEDIATELY after config.js
+        window._supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    </script>
     <script src="ui.js"></script>
     <script src="orders.js"></script>
     <script src="reports.js"></script>
