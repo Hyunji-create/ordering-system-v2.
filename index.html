@@ -52,15 +52,17 @@
             const nameB = b.name || b.item_name || "";
             let indexA = PRODUCT_ORDER.indexOf(nameA);
             let indexB = PRODUCT_ORDER.indexOf(nameB);
-            return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+            indexA = indexA === -1 ? 999 : indexA;
+            indexB = indexB === -1 ? 999 : indexB;
+            return indexA - indexB;
         }
     </script>
 
     <div id="login-card" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-3xl shadow-2xl">
         <h1 class="text-3xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Kitchen Portal</h1>
         <div class="space-y-4 mt-6">
-            <input id="username" type="text" placeholder="USER ID" class="w-full p-4 border-2 rounded-2xl uppercase text-center font-bold">
-            <input id="password" type="password" placeholder="PASSWORD" class="w-full p-4 border-2 rounded-2xl text-center font-bold">
+            <input id="username" type="text" placeholder="USER ID" class="w-full p-4 border-2 rounded-2xl uppercase text-center font-bold outline-none">
+            <input id="password" type="password" placeholder="PASSWORD" class="w-full p-4 border-2 rounded-2xl text-center font-bold outline-none">
             <button onclick="window.handleLogin()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-lg uppercase tracking-widest text-lg">Sign In</button>
         </div>
     </div>
@@ -78,7 +80,7 @@
 
         <div id="view-daily" class="space-y-4">
             <div id="summary-section" class="bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
-                <p class="text-[10px] font-black uppercase mb-4 text-blue-400 tracking-widest">Order Summary & Notes</p>
+                <p class="text-[10px] font-black uppercase mb-4 text-blue-400 tracking-widest">Master Order Summary</p>
                 <div class="flex gap-2">
                     <input id="admin-view-date" type="date" class="flex-1 p-3 rounded-xl text-slate-900 font-bold outline-none">
                     <button onclick="generateConsolidatedReport()" class="bg-blue-600 px-6 py-3 rounded-xl font-black text-[10px] uppercase">View List</button>
@@ -89,8 +91,8 @@
             <div class="bg-white p-6 rounded-3xl shadow-lg space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <select id="supplier-select" onchange="loadProducts()" class="p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs"></select>
-                    <input id="delivery-date" type="date" onchange="applyStandingToDaily();" class="p-4 bg-slate-50 border rounded-2xl font-bold text-center">
-                    <select id="delivery-slot" onchange="applyStandingToDaily();" class="p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs">
+                    <input id="delivery-date" type="date" onchange="applyStandingToDaily()" class="p-4 bg-slate-50 border rounded-2xl font-bold text-center">
+                    <select id="delivery-slot" onchange="applyStandingToDaily()" class="p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs">
                         <option value="1st Delivery">1st Delivery</option>
                         <option value="2nd Delivery">2nd Delivery</option>
                     </select>
@@ -117,9 +119,9 @@
                     <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Sun">SUN</button>
                 </div>
                 <div class="space-y-4 text-slate-900">
-                    <select id="standing-item" class="w-full p-4 rounded-2xl font-bold uppercase text-xs"></select>
+                    <select id="standing-item" class="w-full p-4 rounded-2xl font-bold uppercase text-xs outline-none"></select>
                     <div class="flex gap-2">
-                        <select id="standing-slot" class="flex-1 p-4 rounded-2xl font-bold uppercase text-xs">
+                        <select id="standing-slot" class="flex-1 p-4 rounded-2xl font-bold uppercase text-xs outline-none">
                             <option value="1st Delivery">1st Delivery</option>
                             <option value="2nd Delivery">2nd Delivery</option>
                         </select>
@@ -133,10 +135,6 @@
     </div>
 
     <script>
-        let allStandingOrders = [];
-        let activeProducts = [];
-        let currentDBOrder = null;
-
         function startApp() {
             _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
             setTomorrowDate();
@@ -223,13 +221,8 @@
             const isLocked = checkFormLock();
 
             if (currentFormState !== initialFormState) {
-                if(isLocked) {
-                    btn.classList.remove('btn-disabled');
-                    btn.innerText = "Send Note Only";
-                } else {
-                    btn.classList.remove('btn-disabled');
-                    btn.innerText = "Save Changes";
-                }
+                btn.classList.remove('btn-disabled');
+                btn.innerText = isLocked ? "Send Note Only" : "Save Changes";
             } else {
                 btn.classList.add('btn-disabled');
                 btn.innerText = "No Changes";
