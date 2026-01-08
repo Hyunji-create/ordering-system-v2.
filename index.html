@@ -32,7 +32,6 @@
         </div>
 
         <div id="view-daily" class="space-y-4">
-            
             <div id="summary-section" class="bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
                 <p class="text-[10px] font-black uppercase mb-4 text-blue-400 tracking-widest">Master Order Summary</p>
                 <div class="flex gap-2">
@@ -58,7 +57,7 @@
 
                 <div class="mt-4 text-left">
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 pl-2">General Venue Note</p>
-                    <textarea id="order-comment" oninput="validateChanges()" placeholder="Type here for late additions or special instructions..." class="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm outline-none border-slate-100 focus:border-blue-300 transition-colors" rows="3"></textarea>
+                    <textarea id="order-comment" oninput="validateChanges()" placeholder="Late additions or general instructions..." class="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm outline-none border-slate-100 focus:border-blue-300 transition-colors" rows="3"></textarea>
                 </div>
                 
                 <button id="save-btn" onclick="submitOrder()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm btn-disabled">
@@ -82,10 +81,7 @@
                 <div class="space-y-4 text-slate-900">
                     <select id="standing-item" class="w-full p-4 rounded-2xl font-bold uppercase text-xs"></select>
                     <div class="flex gap-2">
-                        <select id="standing-slot" class="flex-1 p-4 rounded-2xl font-bold uppercase text-xs">
-                            <option value="1st Delivery">1st Delivery</option>
-                            <option value="2nd Delivery">2nd Delivery</option>
-                        </select>
+                        <select id="standing-slot" class="flex-1 p-4 rounded-2xl font-bold uppercase text-xs"><option value="1st Delivery">1st Delivery</option><option value="2nd Delivery">2nd Delivery</option></select>
                         <input id="standing-qty" type="number" placeholder="QTY" class="w-24 p-4 rounded-2xl text-center font-black" inputmode="numeric">
                     </div>
                     <button onclick="addStandingOrder()" class="w-full bg-white text-blue-900 font-black py-5 rounded-2xl uppercase shadow-lg">Save to Schedule</button>
