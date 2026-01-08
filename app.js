@@ -350,3 +350,14 @@ window.addStandingOrder = async function() {
 };
 window.deleteStanding = async function(id) { if(confirm("Remove?")) { await _supabase.from('standing_orders').delete().eq('id', id); loadStandingOrders(); } };
 window.toggleDay = function(btn) { btn.classList.toggle('day-active'); };
+window.adjustQty = function(itemName, change) {
+    if (checkFormLock()) return;
+    const input = document.getElementById(`qty-${itemName}`);
+    if (input) {
+        let currentVal = parseInt(input.value) || 0;
+        let newVal = currentVal + change;
+        if (newVal < 0) newVal = 0;
+        input.value = newVal;
+        validateChanges();
+    }
+};
