@@ -21,8 +21,8 @@
 
     <div id="dashboard" class="hidden max-w-2xl mx-auto space-y-4">
         <div class="bg-white p-5 rounded-3xl shadow-sm flex justify-between items-center border-b-4 border-blue-600">
-            <h1 id="welcome-msg" class="text-2xl font-black text-blue-900 uppercase italic">VENUE</h1>
-            <button onclick="location.reload()" class="bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-bold border uppercase">Logout</button>
+            <h1 id="welcome-msg" class="text-2xl font-black text-blue-900 uppercase italic text-left">VENUE</h1>
+            <button onclick="window.handleLogout()" class="bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-bold border uppercase">Logout</button>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -40,10 +40,12 @@
                 <div id="consolidated-results" class="hidden mt-4 bg-white text-slate-900 p-6 rounded-2xl max-h-[500px] overflow-auto text-left shadow-inner"></div>
             </div>
 
+            <div id="override-status-indicator" class="hidden transition-all duration-300"></div>
+
             <div class="bg-white p-6 rounded-3xl shadow-lg space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <select id="supplier-select" onchange="loadProducts()" class="p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs outline-none"></select>
-                    <input id="delivery-date" type="date" onchange="applyStandingToDaily()" inputmode="numeric" class="p-4 bg-slate-50 border-2 rounded-2xl font-bold text-center outline-none border-slate-100">
+                    <input id="delivery-date" type="date" onchange="applyStandingToDaily()" class="p-4 bg-slate-50 border rounded-2xl font-bold text-center">
                     <select id="delivery-slot" onchange="applyStandingToDaily()" class="p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs">
                         <option value="1st Delivery">1st Delivery</option>
                         <option value="2nd Delivery">2nd Delivery</option>
@@ -53,12 +55,12 @@
                 <div id="product-list" class="divide-y border-t text-left"></div>
 
                 <div class="mt-4 text-left">
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 pl-2">General Venue Note (Late Additions)</p>
-                    <textarea id="order-comment" oninput="validateChanges()" placeholder="Type here for late additions or general instructions..." class="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm outline-none border-slate-100 focus:border-blue-300 transition-colors" rows="3"></textarea>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 pl-2">General Venue Note</p>
+                    <textarea id="order-comment" oninput="validateChanges()" placeholder="Late additions or general instructions..." class="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm outline-none border-slate-100 focus:border-blue-300 transition-colors" rows="3"></textarea>
                 </div>
                 
                 <button id="save-btn" onclick="submitOrder()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm btn-disabled">
-                    Save Order
+                    Save Changes
                 </button>
                 <p id="lock-msg" class="text-[10px] font-black text-red-500 uppercase hidden italic">🔒 Locked (After 1PM). Notes only.</p>
             </div>
