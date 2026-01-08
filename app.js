@@ -1,7 +1,4 @@
-// MASTER PRODUCT SEQUENCE
 const PRODUCT_ORDER = ["Matcha", "Hojicha", "Strawberry Puree", "Chia Pudding", "Mango Puree", "Vanilla Syrup", "Simple Syrup", "Ice"];
-
-// USERS DATABASE
 const USERS = [
     { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'venue' },
     { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'venue' },
@@ -16,7 +13,7 @@ let _supabase, initialFormState = "", currentDBOrder = null;
 let allStandingOrders = [];
 let activeProducts = [];
 
-// LOGIN LOGIC
+// --- LOGIN & STARTUP ---
 window.handleLogin = function() {
     const u = document.getElementById('username').value.toLowerCase().trim();
     const p = document.getElementById('password').value.trim();
@@ -33,11 +30,11 @@ window.handleLogin = function() {
 function startApp() {
     _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     setTomorrowDate();
-    populateSuppliers(); // Re-added this to fix your error
+    window.populateSuppliers();
     loadStandingOrders();
 }
 
-// HELPERS
+// --- HELPERS ---
 function sortItemsByCustomOrder(a, b) {
     const nameA = a.name || a.item_name || "";
     const nameB = b.name || b.item_name || "";
@@ -60,14 +57,14 @@ window.switchTab = function(view) {
     document.getElementById('tab-standing').className = view === 'standing' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
 };
 
-// PRODUCT LOADING
+// --- PRODUCT LOADING ---
 window.populateSuppliers = function() {
     const select = document.getElementById('supplier-select');
     if(select && !select.innerHTML) select.innerHTML = `<option value="CK">CK</option><option value="DSQ">DSQ</option><option value="GJ">GJ</option>`;
     loadProducts();
 };
 
-window.loadProducts = async function() {
+async function loadProducts() {
     const supplier = document.getElementById('supplier-select').value;
     const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
     if (data) {
@@ -99,17 +96,16 @@ window.loadProducts = async function() {
         });
         applyStandingToDaily();
     }
-};
+}
 
 window.toggleNote = function(name) {
     const el = document.getElementById(`note-${name}`);
     el.style.display = el.style.display === 'block' ? 'none' : 'block';
 };
 
-// QTY ADJUSTMENT
+// --- QUANTITY ADJUSTMENT ---
 window.adjustQty = function(itemName, change) {
-    const isLocked = isOrderLocked();
-    if (isLocked) return;
+    if (isOrderLocked()) return;
     const input = document.getElementById(`qty-${itemName}`);
     if (input) {
         let val = parseInt(input.value) || 0;
@@ -119,36 +115,32 @@ window.adjustQty = function(itemName, change) {
     }
 };
 
-// LOCK LOGIC
+// --- LOCK LOGIC ---
 function isOrderLocked() {
     const dateStr = document.getElementById('delivery-date').value;
     const now = new Date();
     const orderDate = new Date(dateStr + "T00:00:00");
     const today = new Date(); today.setHours(0,0,0,0);
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-
     if (orderDate <= today) return true;
     if (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13) return true;
     return false;
 }
 
-// DAILY ORDER LOGIC
 function checkFormLock() {
-    const isLocked = isOrderLocked();
+    const locked = isOrderLocked();
     const btn = document.getElementById('save-btn'), msg = document.getElementById('lock-msg');
     const qtyInputs = document.querySelectorAll('#product-list input[type="number"]');
-    
-    if (isLocked) {
-        btn.classList.add('btn-disabled');
-        msg.classList.remove('hidden');
+    if (locked) {
+        btn.classList.add('btn-disabled'); msg.classList.remove('hidden');
         qtyInputs.forEach(i => i.classList.add('locked-qty'));
     } else {
         msg.classList.add('hidden');
         qtyInputs.forEach(i => i.classList.remove('locked-qty'));
     }
-    return isLocked;
 }
 
+// --- DAILY ORDER CORE ---
 window.applyStandingToDaily = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
@@ -163,7 +155,7 @@ window.applyStandingToDaily = async function() {
 
     if (data) {
         data.items.forEach(item => {
-            const inp = Array.from(document.querySelectorAll('#product-list input[type="number"]')).find(i => i.dataset.name === item.name);
+            const inp = document.getElementById(`qty-${item.name}`);
             if (inp) {
                 inp.value = item.quantity;
                 if (item.comment) {
@@ -176,7 +168,7 @@ window.applyStandingToDaily = async function() {
     } else {
         const matches = allStandingOrders.filter(s => s.days_of_week.includes(targetDay) && s.delivery_slot === slot);
         matches.forEach(s => {
-            const inp = Array.from(document.querySelectorAll('#product-list input[type="number"]')).find(i => i.dataset.name === s.item_name);
+            const inp = document.getElementById(`qty-${s.item_name}`);
             if (inp) { inp.value = s.quantity; inp.classList.add('auto-filled'); }
         });
     }
@@ -190,6 +182,7 @@ function captureState() {
     document.querySelectorAll('.note-input').forEach(i => state.push(i.value));
     state.push(document.getElementById('order-comment').value);
     initialFormState = JSON.stringify(state);
+    validateChanges();
 }
 
 window.validateChanges = function() {
@@ -198,16 +191,12 @@ window.validateChanges = function() {
     document.querySelectorAll('.note-input').forEach(i => state.push(i.value));
     state.push(document.getElementById('order-comment').value);
     const currentFormState = JSON.stringify(state);
-    
     const btn = document.getElementById('save-btn');
-    const isLocked = isOrderLocked();
-
     if (currentFormState !== initialFormState) {
         btn.classList.remove('btn-disabled');
-        btn.innerText = isLocked ? "Send Note to Kitchen" : "Save Changes";
+        btn.innerText = isOrderLocked() ? "Send Note to Kitchen" : "Save Changes";
     } else {
-        btn.classList.add('btn-disabled');
-        btn.innerText = "No Changes";
+        btn.classList.add('btn-disabled'); btn.innerText = "No Changes";
     }
 };
 
@@ -216,19 +205,15 @@ window.submitOrder = async function() {
     const slot = document.getElementById('delivery-slot').value;
     const items = [];
     document.querySelectorAll('#product-list .item-row').forEach(row => {
-        const q = parseInt(row.querySelector('input[type="number"]').value) || 0;
-        const name = row.querySelector('input[type="number"]').dataset.name;
-        const note = row.querySelector('.note-input').value;
-        items.push({ name, quantity: q, comment: note });
+        const inp = row.querySelector('input[type="number"]');
+        items.push({ name: inp.dataset.name, quantity: parseInt(inp.value) || 0, comment: row.querySelector('.note-input').value });
     });
-
-    const generalNote = document.getElementById('order-comment').value;
-    const payload = { venue_id: currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items: items, comment: generalNote };
+    const payload = { venue_id: currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items: items, comment: document.getElementById('order-comment').value };
     let res = currentDBOrder ? await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id) : await _supabase.from('orders').insert([payload]);
     if (!res.error) { alert("Sent to Kitchen!"); applyStandingToDaily(); }
 };
 
-// CONSOLIDATED REPORT
+// --- CONSOLIDATED REPORT ---
 window.generateConsolidatedReport = async function() {
     const dateStr = document.getElementById('admin-view-date').value;
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr + "T00:00:00").getDay()];
@@ -243,23 +228,20 @@ window.generateConsolidatedReport = async function() {
 
         (standings || []).forEach(s => {
             if(s.days_of_week && s.days_of_week.includes(targetDay)) {
-                if(!venueReport[s.venue_id]) venueReport[s.venue_id] = { "1st Delivery": {items:[], note:""}, "2nd Delivery": {items:[], note:""} };
-                venueReport[s.venue_id][s.delivery_slot].items.push({ name: s.item_name, qty: s.quantity });
+                if(venueReport[s.venue_id]) venueReport[s.venue_id][s.delivery_slot].items.push({ name: s.item_name, qty: s.quantity });
             }
         });
-
         (oneOffs || []).forEach(o => {
-            if(!venueReport[o.venue_id]) venueReport[o.venue_id] = { "1st Delivery": {items:[], note:""}, "2nd Delivery": {items:[], note:""} };
-            venueReport[o.venue_id][o.delivery_slot].items = o.items.map(i => ({ name: i.name, qty: i.quantity, note: i.comment || "" }));
-            if (o.comment) venueReport[o.venue_id][o.delivery_slot].note = o.comment;
+            if(venueReport[o.venue_id]) {
+                venueReport[o.venue_id][o.delivery_slot].items = o.items.map(i => ({ name: i.name, qty: i.quantity, note: i.comment || "" }));
+                if (o.comment) venueReport[o.venue_id][o.delivery_slot].note = o.comment;
+            }
         });
 
         let html = `<div class="flex justify-between border-b pb-2 mb-4 uppercase text-[10px] font-black text-blue-900"><span>Loading Plan (${dateStr})</span><button onclick="window.print()" class="underline">Print</button></div>`;
         Object.keys(venueReport).sort().forEach(v => {
             const vData = venueReport[v];
-            const has1st = vData["1st Delivery"].items.length > 0 || vData["1st Delivery"].note;
-            const has2nd = vData["2nd Delivery"].items.length > 0 || vData["2nd Delivery"].note;
-            if(has1st || has2nd) {
+            if(vData["1st Delivery"].items.length > 0 || vData["2nd Delivery"].items.length > 0 || vData["1st Delivery"].note || vData["2nd Delivery"].note) {
                 html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-slate-50 text-left border-slate-100"><h3 class="font-black text-blue-800 text-lg border-b pb-1 mb-3 italic">${v}</h3>`;
                 ["1st Delivery", "2nd Delivery"].forEach(slot => {
                     const activeItems = vData[slot].items.filter(i => i.qty > 0).sort(sortItemsByCustomOrder);
@@ -276,11 +258,11 @@ window.generateConsolidatedReport = async function() {
                 html += `</div>`;
             }
         });
-        res.innerHTML = html || `<p class="text-center p-10 text-slate-400 font-bold">No orders.</p>`;
+        res.innerHTML = html || `<p class="text-center p-10 text-slate-400 font-bold">No orders found.</p>`;
     } catch (e) { res.innerHTML = "Error loading list."; console.error(e); }
 };
 
-// STANDING ORDERS
+// --- STANDING ORDER LOGIC ---
 async function loadStandingOrders() {
     const { data } = await _supabase.from('standing_orders').select('*').eq('venue_id', currentUser.venue);
     allStandingOrders = data || [];
@@ -308,12 +290,14 @@ function renderStandingList() {
     });
 }
 
+window.toggleDay = function(btn) { btn.classList.toggle('day-active'); };
+
 window.addStandingOrder = async function() {
-    const item = document.getElementById('standing-item').value, slot = document.getElementById('standing-slot').value, qty = parseInt(document.getElementById('standing-qty').value);
+    const item = document.getElementById('standing-item').value, slot = document.getElementById('standing-slot').value, qtyInput = document.getElementById('standing-qty'), qty = parseInt(qtyInput.value);
     const days = Array.from(document.querySelectorAll('.day-active')).map(b => b.dataset.day);
     if (!item || isNaN(qty) || days.length === 0) return alert("Fill all info.");
-    await _supabase.from('standing_orders').insert([{ venue_id: currentUser.venue, item_name: item, quantity: qty, delivery_slot: slot, days_of_week: days.join(', ') }]);
-    alert("Added!"); loadStandingOrders();
+    const { error } = await _supabase.from('standing_orders').insert([{ venue_id: currentUser.venue, item_name: item, quantity: qty, delivery_slot: slot, days_of_week: days.join(', ') }]);
+    if(!error) { alert("Added!"); qtyInput.value = ""; document.querySelectorAll('.day-active').forEach(b => b.classList.remove('day-active')); loadStandingOrders(); }
 };
 
 window.deleteStanding = async function(id) { if(confirm("Remove?")) { await _supabase.from('standing_orders').delete().eq('id', id); loadStandingOrders(); } };
