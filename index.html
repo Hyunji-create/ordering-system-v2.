@@ -7,11 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
-        .tab-active { border-bottom: 4px solid #1e40af; color: #1e40af; background-color: #f8fafc; }
-        .day-btn-active { background-color: #1e40af !important; color: white !important; border-color: #1e40af !important; }
+        /* Force tabs to be visible and styled clearly */
+        .tab-btn { border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab-btn-active { border-bottom: 4px solid #1d4ed8 !important; color: #1d4ed8 !important; background-color: #eff6ff; }
+        .day-btn-selected { background-color: #1d4ed8 !important; color: white !important; border-color: #1d4ed8 !important; }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen p-4 pb-20 font-sans text-slate-900">
+<body class="bg-slate-100 min-h-screen p-2 md:p-4 pb-20 font-sans text-slate-900">
 
     <div id="login-card" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-2xl shadow-xl border border-slate-200 text-center">
         <h1 class="text-2xl font-bold text-slate-800 mb-2 uppercase">Kitchen Order Portal</h1>
@@ -19,64 +21,68 @@
         <div class="space-y-4">
             <input id="username" type="text" placeholder="User ID" class="w-full p-4 border rounded-xl uppercase outline-none focus:ring-2 focus:ring-blue-600 text-center">
             <input id="password" type="password" placeholder="Password" class="w-full p-4 border rounded-xl outline-none focus:ring-2 focus:ring-blue-600 text-center">
-            <button onclick="handleLogin()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl hover:bg-black transition-all shadow-lg uppercase tracking-widest">Sign In</button>
+            <button onclick="handleLogin()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg uppercase tracking-widest active:scale-95">Sign In</button>
         </div>
     </div>
 
     <div id="dashboard" class="hidden max-w-2xl mx-auto space-y-4">
         
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
             <div class="text-left">
-                <h1 id="welcome-msg" class="text-xl font-bold text-blue-900 uppercase italic leading-none">Venue</h1>
-                <p id="user-role-display" class="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-widest"></p>
+                <h1 id="welcome-msg" class="text-lg font-bold text-blue-900 uppercase italic leading-none">Venue</h1>
+                <p id="user-role-display" class="text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest"></p>
             </div>
-            <button onclick="location.reload()" class="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-[10px] font-black uppercase border border-red-100">Logout</button>
+            <button onclick="location.reload()" class="bg-red-50 text-red-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase border border-red-100">Logout</button>
         </div>
 
-        <div class="flex bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <button onclick="switchTab('daily')" id="tab-daily" class="flex-1 py-4 font-black text-[11px] uppercase tracking-widest tab-active transition-all">Daily Order</button>
-            <button onclick="switchTab('standing')" id="tab-standing" class="flex-1 py-4 font-black text-[11px] uppercase tracking-widest text-slate-400 transition-all border-l">Standing Orders</button>
+        <div class="flex bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden h-14">
+            <button onclick="switchTab('daily')" id="tab-daily" class="tab-btn tab-btn-active flex-1 flex items-center justify-center font-black text-[11px] uppercase tracking-tighter">
+                📅 Daily Order
+            </button>
+            <button onclick="switchTab('standing')" id="tab-standing" class="tab-btn flex-1 flex items-center justify-center font-black text-[11px] uppercase tracking-tighter text-slate-400 border-l">
+                🔄 Standing Orders
+            </button>
         </div>
 
         <div id="view-daily" class="space-y-4">
-            <div id="kitchen-admin-section" class="hidden bg-slate-800 text-white p-5 rounded-2xl shadow-lg text-left border-b-4 border-blue-500">
-                <h2 class="text-[10px] font-black uppercase tracking-widest mb-4 opacity-70">Kitchen Command Center</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input id="admin-view-date" type="date" class="p-3 rounded-xl text-slate-900 text-sm font-bold w-full">
-                    <button onclick="generateConsolidatedReport()" class="bg-blue-600 text-white font-bold p-3 rounded-xl text-xs uppercase hover:bg-blue-700">Consolidate Orders</button>
+            <div id="kitchen-admin-section" class="hidden bg-slate-900 text-white p-5 rounded-2xl shadow-lg">
+                <h2 class="text-[10px] font-black uppercase tracking-widest mb-3 opacity-60">Kitchen Command Center</h2>
+                <div class="flex gap-2">
+                    <input id="admin-view-date" type="date" class="flex-1 p-2 rounded-lg text-slate-900 text-sm font-bold">
+                    <button onclick="generateConsolidatedReport()" class="bg-blue-600 px-4 py-2 rounded-lg text-[10px] font-bold uppercase">Consolidate</button>
                 </div>
-                <div id="consolidated-results" class="hidden mt-4 bg-white text-slate-900 p-5 rounded-xl border-2 border-slate-800 max-h-96 overflow-auto"></div>
+                <div id="consolidated-results" class="hidden mt-4 bg-white text-slate-900 p-4 rounded-xl max-h-96 overflow-auto text-left"></div>
             </div>
 
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <select id="supplier-select" onchange="loadProducts()" class="p-3 border rounded-xl bg-slate-50 text-sm font-bold uppercase"></select>
-                    <input id="delivery-date" type="date" class="p-3 border rounded-xl bg-slate-50 text-sm font-bold text-center">
-                    <select id="delivery-slot" class="p-3 border rounded-xl bg-slate-50 text-sm font-bold">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <select id="supplier-select" onchange="loadProducts()" class="p-3 border rounded-xl bg-slate-50 text-xs font-bold uppercase"></select>
+                    <input id="delivery-date" type="date" class="p-3 border rounded-xl bg-slate-50 text-xs font-bold text-center">
+                    <select id="delivery-slot" class="p-3 border rounded-xl bg-slate-50 text-xs font-bold">
                         <option value="1st Delivery">1st Delivery</option>
                         <option value="2nd Delivery">2nd Delivery</option>
                     </select>
                 </div>
                 <div id="product-list" class="space-y-1 border-t pt-4"></div>
-                <textarea id="order-comment" placeholder="Special requests or edit requests..." class="w-full p-4 bg-slate-50 border rounded-xl text-xs outline-none" rows="2"></textarea>
+                <textarea id="order-comment" placeholder="Any special requests?" class="w-full p-3 bg-slate-50 border rounded-xl text-xs" rows="2"></textarea>
                 <button onclick="submitOrder()" class="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-lg uppercase tracking-widest text-xs active:scale-95">Submit Daily Order</button>
             </div>
         </div>
 
-        <div id="view-standing" class="hidden space-y-4">
-            <div class="bg-blue-900 text-white p-6 rounded-2xl shadow-lg text-center">
-                <h3 class="text-[10px] font-black uppercase tracking-[0.2em] mb-4 opacity-70">Create Weekly Schedule</h3>
+        <div id="view-standing" class="hidden space-y-4 animate-in fade-in duration-300">
+            <div class="bg-blue-900 text-white p-6 rounded-2xl shadow-lg">
+                <h3 class="text-[10px] font-black uppercase tracking-widest mb-4 text-blue-200 text-center">Create Weekly Schedule</h3>
                 <div class="space-y-4">
                     <div class="flex flex-wrap gap-1 justify-center" id="day-selector">
-                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black uppercase" data-day="Mon">Mon</button>
-                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black uppercase" data-day="Tue">Tue</button>
-                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black uppercase" data-day="Wed">Wed</button>
-                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black uppercase" data-day="Thu">Thu</button>
-                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black uppercase" data-day="Fri">Fri</button>
-                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black uppercase" data-day="Sat">Sat</button>
-                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black uppercase" data-day="Sun">Sun</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-2 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black w-10" data-day="Mon">Mon</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-2 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black w-10" data-day="Tue">Tue</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-2 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black w-10" data-day="Wed">Wed</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-2 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black w-10" data-day="Thu">Thu</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-2 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black w-10" data-day="Fri">Fri</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-2 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black w-10" data-day="Sat">Sat</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-2 py-2 bg-blue-800 border border-blue-700 rounded-lg text-[10px] font-black w-10" data-day="Sun">Sun</button>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div class="grid grid-cols-1 gap-2">
                         <select id="standing-item" class="p-3 rounded-xl text-slate-900 text-xs font-bold uppercase"></select>
                         <select id="standing-slot" class="p-3 rounded-xl text-slate-900 text-xs font-bold uppercase">
                             <option value="1st Delivery">1st Delivery</option>
@@ -84,19 +90,19 @@
                         </select>
                     </div>
                     <div class="flex space-x-2">
-                        <input id="standing-qty" type="number" placeholder="Qty" class="flex-1 p-3 rounded-xl text-slate-900 text-center font-bold">
-                        <button onclick="addStandingOrder()" class="flex-[2] bg-white text-blue-900 font-black rounded-xl uppercase text-[10px] tracking-widest">Add Schedule</button>
+                        <input id="standing-qty" type="number" placeholder="Qty" class="w-20 p-3 rounded-xl text-slate-900 text-center font-bold">
+                        <button onclick="addStandingOrder()" class="flex-1 bg-white text-blue-900 font-black rounded-xl uppercase text-[10px] tracking-widest">Set Schedule</button>
                     </div>
                 </div>
             </div>
-            <div id="current-standing-list" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h3 class="text-[10px] font-black text-slate-400 uppercase text-center mb-4 tracking-widest">Active Standing Orders</h3>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 class="text-[10px] font-black text-slate-300 uppercase text-center mb-4 tracking-widest">Your Weekly Auto-Orders</h3>
                 <div id="standing-items-container" class="space-y-2"></div>
             </div>
         </div>
 
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <h2 class="text-[10px] font-black uppercase text-slate-400 mb-4 tracking-[0.2em] border-b pb-2 text-center">Global activity</h2>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+            <h2 class="text-[10px] font-black uppercase text-slate-400 mb-4 tracking-widest text-center border-b pb-2">Recent Global Activity</h2>
             <div id="history-container" class="space-y-3 text-left"></div>
         </div>
     </div>
@@ -123,8 +129,10 @@
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             const formatted = tomorrow.toISOString().split('T')[0];
-            document.getElementById('delivery-date').value = formatted;
-            document.getElementById('admin-view-date').value = formatted;
+            const dDate = document.getElementById('delivery-date');
+            const aDate = document.getElementById('admin-view-date');
+            if(dDate) dDate.value = formatted;
+            if(aDate) aDate.value = formatted;
         }
 
         function handleLogin() {
@@ -136,20 +144,20 @@
                 document.getElementById('login-card').classList.add('hidden');
                 document.getElementById('dashboard').classList.remove('hidden');
                 document.getElementById('welcome-msg').innerText = "Venue: " + found.venue;
-                document.getElementById('user-role-display').innerText = found.role + " mode";
+                document.getElementById('user-role-display').innerText = found.role.toUpperCase() + " PORTAL";
                 if (found.role === 'kitchen') document.getElementById('kitchen-admin-section').classList.remove('hidden');
                 setTomorrowDate();
                 populateSuppliers();
                 loadHistory();
                 loadStandingOrders();
-            } else { alert("Login Failed"); }
+            } else { alert("Login Error: Check credentials."); }
         }
 
         function populateSuppliers() {
             const select = document.getElementById('supplier-select');
-            select.innerHTML = `<option value="CK">Central Kitchen (CK)</option>
-                               <option value="DSQ">DSQ Kitchen (DSQ)</option>
-                               <option value="GJ">Gojima Supplier (GJ)</option>`;
+            select.innerHTML = `<option value="CK">CK (Central Kitchen)</option>
+                               <option value="DSQ">DSQ (Kitchen)</option>
+                               <option value="GJ">GJ (Gojima Supplier)</option>`;
             loadProducts();
         }
 
@@ -162,22 +170,21 @@
                 const dropdown = document.getElementById('standing-item');
                 list.innerHTML = "";
                 
-                // Only reset standing dropdown once per login to prevent clearing selections
-                if(dropdown.innerHTML === "") dropdown.innerHTML = `<option value="">Select Item</option>`;
+                if(dropdown.innerHTML === "") dropdown.innerHTML = `<option value="">-- SELECT PRODUCT --</option>`;
 
                 data.forEach(prod => {
                     const allowed = prod.restricted_to ? prod.restricted_to.split(',').map(v=>v.trim()) : [];
                     if (prod.restricted_to && !allowed.includes(currentUser.venue)) return;
                     
                     const div = document.createElement('div');
-                    div.className = "flex items-center justify-between p-3 border-b border-slate-50";
-                    div.innerHTML = `<div class="text-left"><p class="text-[13px] font-bold uppercase leading-none">${prod.name}</p><p class="text-[9px] text-slate-400 font-bold mt-1">${prod.unit}</p></div><input type="number" id="qty-${prod.id}" data-pid="${prod.id}" data-name="${prod.name}" data-unit="${prod.unit}" min="0" placeholder="0" class="w-14 p-2 border rounded-lg text-center font-bold text-blue-600 outline-none">`;
+                    div.className = "flex items-center justify-between p-3 border-b border-slate-50 hover:bg-slate-50";
+                    div.innerHTML = `<div class="text-left"><p class="text-[13px] font-bold uppercase leading-none text-slate-700">${prod.name}</p><p class="text-[9px] text-slate-400 font-bold mt-1 uppercase">${prod.unit}</p></div><input type="number" id="qty-${prod.id}" data-pid="${prod.id}" data-name="${prod.name}" data-unit="${prod.unit}" min="0" placeholder="0" class="w-14 p-2 border rounded-lg text-center font-bold text-blue-600 outline-none">`;
                     list.appendChild(div);
 
                     if (!Array.from(dropdown.options).some(opt => opt.value === prod.name)) {
                         const opt = document.createElement('option');
                         opt.value = prod.name;
-                        opt.innerText = prod.name + " (" + prod.supplier + ")";
+                        opt.innerText = prod.name;
                         dropdown.appendChild(opt);
                     }
                 });
@@ -187,23 +194,35 @@
         function switchTab(view) {
             document.getElementById('view-daily').classList.toggle('hidden', view !== 'daily');
             document.getElementById('view-standing').classList.toggle('hidden', view !== 'standing');
-            document.getElementById('tab-daily').classList.toggle('tab-active', view === 'daily');
-            document.getElementById('tab-daily').classList.toggle('text-slate-400', view !== 'daily');
-            document.getElementById('tab-standing').classList.toggle('tab-active', view === 'standing');
-            document.getElementById('tab-standing').classList.toggle('text-slate-400', view !== 'standing');
+            
+            const tabD = document.getElementById('tab-daily');
+            const tabS = document.getElementById('tab-standing');
+
+            if(view === 'daily') {
+                tabD.classList.add('tab-btn-active');
+                tabD.classList.remove('text-slate-400');
+                tabS.classList.remove('tab-btn-active');
+                tabS.classList.add('text-slate-400');
+            } else {
+                tabS.classList.add('tab-btn-active');
+                tabS.classList.remove('text-slate-400');
+                tabD.classList.remove('tab-btn-active');
+                tabD.classList.add('text-slate-400');
+            }
         }
 
         function toggleDay(btn) {
             btn.classList.toggle('day-btn-active');
+            btn.classList.toggle('day-btn-selected');
         }
 
         async function addStandingOrder() {
             const item = document.getElementById('standing-item').value;
             const slot = document.getElementById('standing-slot').value;
             const qty = parseInt(document.getElementById('standing-qty').value);
-            const days = Array.from(document.querySelectorAll('.day-btn-active')).map(b => b.dataset.day);
+            const days = Array.from(document.querySelectorAll('.day-btn-selected')).map(b => b.dataset.day);
 
-            if (!item || !qty || days.length === 0) return alert("Select Day(s), Item, and Quantity");
+            if (!item || !qty || days.length === 0) return alert("Error: Select Day(s), Product, and Qty.");
 
             const { error } = await _supabase.from('standing_orders').insert([{
                 venue_id: currentUser.venue,
@@ -214,11 +233,13 @@
             }]);
 
             if (!error) {
-                alert("Standing Order Created!");
+                alert("Success: Standing Order Saved.");
                 loadStandingOrders();
                 document.getElementById('standing-qty').value = "";
-                document.querySelectorAll('.day-btn-active').forEach(b => b.classList.remove('day-btn-active'));
-            } else { alert(error.message); }
+                document.querySelectorAll('.day-btn-selected').forEach(b => {
+                    b.classList.remove('day-btn-active', 'day-btn-selected');
+                });
+            } else { alert("DB Error: " + error.message); }
         }
 
         async function loadStandingOrders() {
@@ -228,15 +249,15 @@
             if (data && data.length > 0) {
                 data.forEach(s => {
                     const div = document.createElement('div');
-                    div.className = "flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100";
-                    div.innerHTML = `<div class="text-left"><p class="font-black text-slate-800 text-xs uppercase">${s.item_name} (x${s.quantity})</p><p class="text-[9px] text-blue-600 font-black uppercase mt-1 tracking-tighter">${s.days_of_week} | ${s.delivery_slot}</p></div><button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase hover:underline">Delete</button>`;
+                    div.className = "flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm";
+                    div.innerHTML = `<div class="text-left"><p class="font-black text-slate-800 text-xs uppercase">${s.item_name} (x${s.quantity})</p><p class="text-[9px] text-blue-600 font-black uppercase mt-1">${s.days_of_week} | ${s.delivery_slot}</p></div><button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase border border-red-100 px-2 py-1 rounded-lg">Delete</button>`;
                     container.appendChild(div);
                 });
-            } else { container.innerHTML = "<p class='text-center text-slate-300 text-[10px] italic py-4'>No schedules found.</p>"; }
+            } else { container.innerHTML = "<p class='text-center text-slate-300 text-[10px] italic py-8'>No active schedules found.</p>"; }
         }
 
         async function deleteStanding(id) {
-            if(confirm("Permanently remove this schedule?")) {
+            if(confirm("Confirm: Delete this auto-order schedule?")) {
                 await _supabase.from('standing_orders').delete().eq('id', id);
                 loadStandingOrders();
             }
@@ -250,7 +271,7 @@
                 const q = parseInt(el.value) || 0;
                 if (q > 0) orderItems.push({ name: el.dataset.name, quantity: q, unit: el.dataset.unit });
             });
-            if (orderItems.length === 0) return alert("Empty Order");
+            if (orderItems.length === 0) return alert("Error: Enter quantities first.");
             const { error } = await _supabase.from('orders').insert([{
                 venue_id: currentUser.venue,
                 delivery_date: dateStr,
@@ -258,7 +279,7 @@
                 items: orderItems,
                 comment: document.getElementById('order-comment').value
             }]);
-            if (!error) { alert("One-off Order Sent!"); loadHistory(); inputs.forEach(i => i.value=""); }
+            if (!error) { alert("Success: Order Submitted!"); loadHistory(); inputs.forEach(i => i.value=""); }
         }
 
         async function generateConsolidatedReport() {
@@ -267,7 +288,7 @@
             const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
             const targetDay = dayNames[targetDate.getDay()];
             const results = document.getElementById('consolidated-results');
-            results.innerHTML = "<p class='animate-pulse text-center p-4'>Gathering data...</p>";
+            results.innerHTML = "<p class='text-center p-4 text-xs font-bold animate-pulse'>CALCULATING...</p>";
             results.classList.remove('hidden');
 
             const { data: oneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', dateStr);
@@ -291,16 +312,16 @@
                 });
             });
 
-            let html = `<h4 class="font-black text-blue-900 border-b pb-2 mb-2 text-xs uppercase tracking-widest">Master Pick List (${targetDay} ${dateStr})</h4>`;
+            let html = `<h4 class="font-black text-blue-900 border-b pb-2 mb-2 text-xs uppercase">1. TOTAL PICK LIST</h4>`;
             for (const [name, qty] of Object.entries(finalTotals)) {
                 html += `<div class="flex justify-between border-b border-slate-50 py-2 text-sm font-bold"><span>${name}</span><span class="text-blue-600">x${qty}</span></div>`;
             }
 
-            html += `<h4 class="font-black text-blue-900 border-b pb-2 mt-8 mb-4 text-xs uppercase tracking-widest">Packing By Venue</h4>`;
+            html += `<h4 class="font-black text-blue-900 border-b pb-2 mt-8 mb-4 text-xs uppercase">2. BY VENUE</h4>`;
             for (const [venue, items] of Object.entries(venueView)) {
-                html += `<div class="mb-6 p-4 border-2 border-slate-50 rounded-2xl"><p class="font-black text-slate-800 uppercase italic mb-2">${venue}</p>`;
+                html += `<div class="mb-6 p-4 border-2 border-slate-100 rounded-2xl"><p class="font-black text-slate-800 uppercase italic mb-2 border-b pb-1 text-sm">${venue}</p>`;
                 items.forEach(i => {
-                    html += `<div class="flex justify-between border-b border-slate-50 py-1 text-xs font-bold"><span>${i.name} (${i.slot})</span><span class="text-blue-500">x${i.quantity} <span class="text-[9px] opacity-50">${i.type}</span></span></div>`;
+                    html += `<div class="flex justify-between border-b border-slate-50 py-1 text-xs font-bold"><span>${i.name}</span><span class="text-blue-500">x${i.quantity} <span class="text-[8px] opacity-40">(${i.type})</span></span></div>`;
                 });
                 html += `</div>`;
             }
@@ -311,8 +332,8 @@
             const { data } = await _supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(10);
             if (data) {
                 document.getElementById('history-container').innerHTML = data.map(o => `
-                    <div class="p-3 bg-slate-50 rounded-xl text-[11px] border shadow-sm">
-                        <div class="flex justify-between font-black uppercase text-[10px] mb-1"><span class="text-blue-600">${o.venue_id}</span><span class="text-slate-400">${o.delivery_date}</span></div>
+                    <div class="p-3 bg-slate-50 rounded-xl text-[11px] border border-slate-100 shadow-sm">
+                        <div class="flex justify-between font-black uppercase text-[10px] mb-1"><span class="text-blue-600">${o.venue_id}</span><span class="text-slate-400">DATE: ${o.delivery_date}</span></div>
                         <p class="text-slate-800 font-medium">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</p>
                     </div>
                 `).join('');
