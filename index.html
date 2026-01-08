@@ -18,6 +18,13 @@
         const SUPABASE_URL = 'https://lmkmzcbgzpkprkvrwibn.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxta216Y2JnenBrcHJrdnJ3aWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODU0NzYsImV4cCI6MjA4MzM2MTQ3Nn0.u0cw2sNejJP-21CXNbeT9oYLuwMC8vZc9E23a4VIbOU';
         
+        // --- CUSTOM ITEM SEQUENCE ---
+        // Add any new items here in the exact order you want them to appear
+        const PRODUCT_ORDER = [
+            "Matcha", "Hojicha", "Strawberry Puree", "Chia Pudding", 
+            "Mango Puree", "Vanilla Syrup", "Simple Syrup", "Ice"
+        ];
+
         const USERS = [
             { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'venue' },
             { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'venue' },
@@ -58,14 +65,14 @@
         <div class="bg-white p-5 rounded-3xl shadow-sm flex justify-between items-center border-b-4 border-blue-600">
             <div class="text-left">
                 <h1 id="welcome-msg" class="text-2xl font-black text-blue-900 uppercase italic">VENUE</h1>
-                <p id="user-role-display" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest"></p>
+                <p id="user-role-display" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1"></p>
             </div>
-            <button onclick="location.reload()" class="bg-slate-100 px-4 py-2 rounded-xl text-[10px] font-bold border uppercase">Logout</button>
+            <button onclick="location.reload()" class="bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-bold border uppercase">Logout</button>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
-            <button onclick="switchTab('daily')" id="tab-daily" class="tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white">📅 Daily Order</button>
-            <button onclick="switchTab('standing')" id="tab-standing" class="py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400">🔄 Standing Order</button>
+            <button onclick="switchTab('daily')" id="tab-daily" class="tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white transition-all">📅 Daily Order</button>
+            <button onclick="switchTab('standing')" id="tab-standing" class="py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400 transition-all">🔄 Standing Order</button>
         </div>
 
         <div id="view-daily" class="space-y-4">
@@ -78,7 +85,7 @@
             </div>
 
             <div class="bg-white p-6 rounded-3xl shadow-lg space-y-6">
-                <button onclick="applyStandingToDaily()" class="w-full bg-blue-100 text-blue-700 font-black py-3 rounded-2xl border-2 border-blue-200 uppercase text-[10px] tracking-widest hover:bg-blue-200 transition-all">
+                <button onclick="applyStandingToDaily()" class="w-full bg-blue-100 text-blue-700 font-black py-3 rounded-2xl border-2 border-blue-200 uppercase text-[10px] tracking-widest hover:bg-blue-200">
                     ⚡ Sync My Standing Orders for this Date
                 </button>
 
@@ -91,8 +98,8 @@
                     </select>
                 </div>
                 <div id="product-list" class="divide-y border-t border-slate-100"></div>
-                <textarea id="order-comment" placeholder="Note for kitchen (optional)..." class="w-full p-4 bg-slate-50 border rounded-2xl text-sm" rows="2"></textarea>
-                <button onclick="submitOrder()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm">Place Final Order</button>
+                <textarea id="order-comment" placeholder="Note for kitchen..." class="w-full p-4 bg-slate-50 border rounded-2xl text-sm" rows="2"></textarea>
+                <button onclick="submitOrder()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm">Submit Daily Order</button>
             </div>
         </div>
 
@@ -119,7 +126,9 @@
                     <button onclick="addStandingOrder()" class="w-full bg-white text-blue-900 font-black py-5 rounded-2xl uppercase shadow-lg">Set Schedule</button>
                 </div>
             </div>
+
             <div class="bg-white p-6 rounded-3xl shadow-md border border-slate-100 text-left">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-4">Current Weekly Schedule</p>
                 <div id="standing-items-container" class="space-y-6"></div>
             </div>
         </div>
@@ -142,12 +151,21 @@
             loadStandingOrders();
         }
 
+        // Helper to sort based on the PRODUCT_ORDER array
+        function sortItemsByCustomOrder(a, b) {
+            let indexA = PRODUCT_ORDER.indexOf(a.name || a.item_name);
+            let indexB = PRODUCT_ORDER.indexOf(b.name || b.item_name);
+            // If item not found in list, put it at the end
+            if (indexA === -1) indexA = 999;
+            if (indexB === -1) indexB = 999;
+            return indexA - indexB;
+        }
+
         async function applyStandingToDaily() {
             const dateStr = document.getElementById('delivery-date').value;
-            const selectedSlot = document.getElementById('delivery-slot').value; // Get the slot (1st or 2nd)
+            const selectedSlot = document.getElementById('delivery-slot').value;
             const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr).getDay()];
             
-            // 1. Filter by Day AND Slot
             const matches = allStandingOrders.filter(s => 
                 s.days_of_week.includes(targetDay) && 
                 s.delivery_slot === selectedSlot
@@ -158,29 +176,24 @@
                 return;
             }
 
-            // 2. Clear current inputs
             document.querySelectorAll('#product-list input').forEach(inp => {
                 inp.value = "";
                 inp.classList.remove('bg-blue-50', 'border-blue-300');
             });
 
-            // 3. Apply exact matches
-            let itemsSynced = 0;
             matches.forEach(s => {
                 const inputs = document.querySelectorAll('#product-list input');
                 inputs.forEach(inp => {
                     if (inp.dataset.name === s.item_name) {
-                        // If multiple standing orders exist for the same item in the same slot, sum them
                         const currentVal = parseInt(inp.value) || 0;
                         inp.value = currentVal + s.quantity;
                         inp.classList.add('bg-blue-50', 'border-blue-300');
-                        itemsSynced++;
                     }
                 });
             });
-
-            alert(`Synced ${itemsSynced} items for ${targetDay} (${selectedSlot}).`);
+            alert(`Synced items for ${targetDay} (${selectedSlot}).`);
         }
+
         function setTomorrowDate() {
             const tom = new Date(); tom.setDate(tom.getDate() + 1);
             document.getElementById('delivery-date').value = tom.toISOString().split('T')[0];
@@ -203,16 +216,25 @@
             const supplier = document.getElementById('supplier-select').value;
             const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
             if (data) {
-                activeProducts = data;
+                // Apply Custom Sort to daily product list
+                activeProducts = data.sort(sortItemsByCustomOrder);
+                
                 const list = document.getElementById('product-list');
                 const drop = document.getElementById('standing-item');
                 list.innerHTML = "";
-                if(drop.innerHTML === "") drop.innerHTML = `<option value="">-- SELECT PRODUCT --</option>`;
-                data.forEach(p => {
+                
+                // Clear dropdown and apply sorted items
+                drop.innerHTML = `<option value="">-- SELECT PRODUCT --</option>`;
+                activeProducts.forEach(p => {
                     const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
                     if (p.restricted_to && !allowed.includes(window.currentUser.venue)) return;
-                    list.innerHTML += `<div class="flex justify-between items-center py-4 text-left"><div class="flex-1"><p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p><p class="text-[10px] text-slate-400 mt-1 uppercase font-bold">${p.unit}</p></div><input type="number" id="qty-${p.id}" data-pid="${p.id}" data-name="${p.name}" data-unit="${p.unit}" placeholder="0" class="w-16 p-3 bg-slate-50 border-2 rounded-xl text-center font-bold text-blue-600"></div>`;
-                    if (!Array.from(drop.options).some(o => o.value === p.name)) drop.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+                    
+                    list.innerHTML += `<div class="flex justify-between items-center py-4 text-left"><div class="flex-1"><p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p><p class="text-[10px] text-slate-400 mt-1 uppercase font-bold">${p.unit}</p></div><input type="number" id="qty-${p.id}" data-pid="${p.id}" data-name="${p.name}" data-unit="${p.unit}" placeholder="0" class="w-16 p-3 bg-slate-50 border-2 rounded-xl text-center font-black text-blue-600 outline-none focus:border-blue-500"></div>`;
+                    
+                    const opt = document.createElement('option');
+                    opt.value = p.name;
+                    opt.innerText = p.name;
+                    drop.appendChild(opt);
                 });
             }
         }
@@ -231,17 +253,32 @@
 
         async function loadStandingOrders() {
             const { data } = await _supabase.from('standing_orders').select('*').eq('venue_id', window.currentUser.venue);
-            allStandingOrders = data || []; // Store globally for the Sync function
+            allStandingOrders = data || [];
             const cont = document.getElementById('standing-items-container');
             cont.innerHTML = "";
             const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+            const slots = ["1st Delivery", "2nd Delivery"];
+
             weekDays.forEach(day => {
                 const dayOrders = allStandingOrders.filter(s => s.days_of_week.includes(day));
                 if (dayOrders.length > 0) {
-                    let dayHtml = `<div class="mb-4"><h4 class="text-[11px] font-black text-blue-600 uppercase border-b-2 border-blue-50 mb-2 pb-1">${day} Orders</h4><div class="space-y-2">`;
-                    dayOrders.forEach(s => {
-                        dayHtml += `<div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100"><div class="text-left"><p class="font-bold text-slate-800 text-[12px] uppercase leading-none">${s.item_name} <span class="text-blue-600">x${s.quantity}</span></p><p class="text-[9px] text-slate-400 font-bold uppercase mt-1 tracking-tighter">${s.delivery_slot}</p></div><button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase hover:underline">Delete</button></div>`;
+                    let dayHtml = `<div class="mb-4"><h4 class="text-[11px] font-black text-blue-600 uppercase border-b-2 border-blue-50 mb-2 pb-1">${day} Orders</h4><div class="space-y-4">`;
+                    
+                    // Organize by Slot
+                    slots.forEach(slot => {
+                        const slotOrders = dayOrders.filter(o => o.delivery_slot === slot);
+                        if (slotOrders.length > 0) {
+                            // Sort items within the slot
+                            slotOrders.sort(sortItemsByCustomOrder);
+                            
+                            dayHtml += `<div class="pl-2 border-l-2 border-slate-100"><p class="text-[9px] font-black text-slate-400 uppercase mb-2 italic">${slot}</p>`;
+                            slotOrders.forEach(s => {
+                                dayHtml += `<div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100 mb-1"><div class="text-left"><p class="font-bold text-slate-800 text-[12px] uppercase leading-none">${s.item_name} <span class="text-blue-600">x${s.quantity}</span></p></div><button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase hover:underline">Delete</button></div>`;
+                            });
+                            dayHtml += `</div>`;
+                        }
                     });
+                    
                     dayHtml += `</div></div>`;
                     cont.innerHTML += dayHtml;
                 }
@@ -288,10 +325,20 @@
                 });
             });
 
+            // Sorting Pick List
+            const sortedTotals = Object.entries(totals).sort((a, b) => {
+                let indexA = PRODUCT_ORDER.indexOf(a[0]);
+                let indexB = PRODUCT_ORDER.indexOf(b[0]);
+                return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+            });
+
             let html = `<div class="flex justify-between items-center mb-4 border-b pb-2"><h4 class="font-black text-blue-900 uppercase text-[10px] tracking-widest">Master Pick List</h4><button onclick="window.print()" class="text-[9px] font-black uppercase underline">Print</button></div>`;
-            for (const [n, q] of Object.entries(totals)) html += `<div class="flex justify-between border-b py-2 text-sm font-bold"><span>${n}</span><span>x${q}</span></div>`;
+            for (const [n, q] of sortedTotals) html += `<div class="flex justify-between border-b py-2 text-sm font-bold"><span>${n}</span><span class="text-blue-600">x${q}</span></div>`;
+            
             html += `<h4 class="font-black border-b mt-8 mb-4 text-blue-900 uppercase text-[10px] tracking-widest">Venue Breakdown</h4>`;
             for (const [v, items] of Object.entries(venueView)) {
+                // Sort items within venue breakdown
+                items.sort(sortItemsByCustomOrder);
                 html += `<div class="mb-6 bg-slate-50 p-4 border-2 rounded-2xl text-left"><p class="font-black text-blue-700 uppercase mb-2 italic border-b pb-1 text-sm">${v}</p>`;
                 items.forEach(i => html += `<div class="flex justify-between text-xs font-bold py-1 border-b border-white last:border-0"><span>${i.name}</span><span class="text-blue-500">x${i.qty} <span class="text-[8px] opacity-40 italic">(${i.type})</span></span></div>`);
                 html += `</div>`;
