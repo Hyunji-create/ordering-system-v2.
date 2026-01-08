@@ -213,7 +213,7 @@ window.submitOrder = async function() {
     if (!res.error) { alert("Sent to Kitchen!"); applyStandingToDaily(); }
 };
 
-// --- CONSOLIDATED REPORT ---
+// --- CONSOLIDATED REPORT (WITH CK PREP LIST) ---
 window.generateConsolidatedReport = async function() {
     const dateStr = document.getElementById('admin-view-date').value;
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr + "T00:00:00").getDay()];
@@ -224,21 +224,54 @@ window.generateConsolidatedReport = async function() {
         const { data: oneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', dateStr);
         const { data: standings } = await _supabase.from('standing_orders').select('*');
         const venueReport = {};
+        const totalCounts = {};
+        PRODUCT_ORDER.forEach(p => totalCounts[p] = 0);
+
         ["WYN", "MCC", "WSQ", "DSQ", "GJ"].forEach(v => { venueReport[v] = { "1st Delivery": {items:[], note:""}, "2nd Delivery": {items:[], note:""} }; });
 
         (standings || []).forEach(s => {
             if(s.days_of_week && s.days_of_week.includes(targetDay)) {
-                if(venueReport[s.venue_id]) venueReport[s.venue_id][s.delivery_slot].items.push({ name: s.item_name, qty: s.quantity });
+                if(venueReport[s.venue_id]) {
+                    venueReport[s.venue_id][s.delivery_slot].items.push({ name: s.item_name, qty: s.quantity });
+                    if(totalCounts.hasOwnProperty(s.item_name)) totalCounts[s.item_name] += s.quantity;
+                }
             }
         });
+
         (oneOffs || []).forEach(o => {
             if(venueReport[o.venue_id]) {
+                // Deduct any standing order counts before overwriting with manual order
+                venueReport[o.venue_id][o.delivery_slot].items.forEach(oldItem => {
+                    if(totalCounts.hasOwnProperty(oldItem.name)) totalCounts[oldItem.name] -= oldItem.qty;
+                });
+
                 venueReport[o.venue_id][o.delivery_slot].items = o.items.map(i => ({ name: i.name, qty: i.quantity, note: i.comment || "" }));
                 if (o.comment) venueReport[o.venue_id][o.delivery_slot].note = o.comment;
+
+                // Add manual counts to total
+                o.items.forEach(i => {
+                    if(totalCounts.hasOwnProperty(i.name)) totalCounts[i.name] += i.quantity;
+                });
             }
         });
 
         let html = `<div class="flex justify-between border-b pb-2 mb-4 uppercase text-[10px] font-black text-blue-900"><span>Loading Plan (${dateStr})</span><button onclick="window.print()" class="underline">Print</button></div>`;
+
+        // --- SPECIAL CK TOTAL PREP SUMMARY ---
+        if (window.currentUser.venue === 'CK') {
+            html += `<div class="mb-6 p-4 border-2 border-blue-600 bg-blue-50 rounded-2xl text-left shadow-md">
+                        <h3 class="font-black text-blue-900 text-lg border-b border-blue-200 pb-1 mb-3 uppercase italic">Total Prep List (All Venues)</h3>
+                        <div class="grid grid-cols-1 gap-1">`;
+            PRODUCT_ORDER.forEach(p => {
+                const count = totalCounts[p];
+                html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-blue-100">
+                            <span class="text-slate-700">${p}</span>
+                            <span class="text-blue-700 bg-white px-3 rounded-lg border">x ${count}</span>
+                         </div>`;
+            });
+            html += `</div></div>`;
+        }
+
         Object.keys(venueReport).sort().forEach(v => {
             const vData = venueReport[v];
             if(vData["1st Delivery"].items.length > 0 || vData["2nd Delivery"].items.length > 0 || vData["1st Delivery"].note || vData["2nd Delivery"].note) {
@@ -264,7 +297,7 @@ window.generateConsolidatedReport = async function() {
 
 // --- STANDING ORDER LOGIC ---
 async function loadStandingOrders() {
-    const { data } = await _supabase.from('standing_orders').select('*').eq('venue_id', currentUser.venue);
+    const { data } = await _supabase.from('standing_orders').select('*');
     allStandingOrders = data || [];
     renderStandingList();
     applyStandingToDaily();
@@ -273,8 +306,9 @@ async function loadStandingOrders() {
 function renderStandingList() {
     const cont = document.getElementById('standing-items-container'); if(!cont) return;
     cont.innerHTML = "";
+    const venueStandings = allStandingOrders.filter(s => s.venue_id === window.currentUser.venue);
     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach(day => {
-        const dayOrders = allStandingOrders.filter(s => s.days_of_week.includes(day));
+        const dayOrders = venueStandings.filter(s => s.days_of_week.includes(day));
         if (dayOrders.length > 0) {
             let dayHtml = `<div class="mb-4 text-left"><h4 class="text-[11px] font-black text-blue-600 uppercase border-b mb-2 pb-1">${day}</h4>`;
             ["1st Delivery", "2nd Delivery"].forEach(slot => {
