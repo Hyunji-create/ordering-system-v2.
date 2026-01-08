@@ -45,7 +45,7 @@
 
             <div class="bg-white p-6 rounded-3xl shadow-lg space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <select id="supplier-select" onchange="loadProducts()" class="p-4 bg-slate-50 border-2 rounded-2xl font-bold uppercase text-xs outline-none border-slate-100"></select>
+                    <select id="supplier-select" onchange="window.loadProducts()" ...></select>
                     <input id="delivery-date" type="date" onchange="applyStandingToDaily()" class="p-4 bg-slate-50 border-2 rounded-2xl font-bold text-center border-slate-100">
                     <select id="delivery-slot" onchange="applyStandingToDaily()" class="p-4 bg-slate-50 border-2 rounded-2xl font-bold uppercase text-xs border-slate-100">
                         <option value="1st Delivery">1st Delivery</option>
