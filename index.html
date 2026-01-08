@@ -98,4 +98,274 @@
                     ⚠️ You are currently editing an existing order
                 </div>
                 
-                <button onclick="applyStandingToDaily()" class="w-full bg-blue-100 text-blue-70
+                <button onclick="applyStandingToDaily()" class="w-full bg-blue-100 text-blue-700 font-black py-3 rounded-2xl border-2 border-blue-200 uppercase text-[10px] tracking-widest hover:bg-blue-200">
+                    ⚡ Sync My Standing Orders
+                </button>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <select id="supplier-select" onchange="loadProducts()" class="p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs"></select>
+                    <input id="delivery-date" type="date" class="p-4 bg-slate-50 border rounded-2xl font-bold text-center">
+                    <select id="delivery-slot" class="p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs">
+                        <option value="1st Delivery">1st Delivery</option>
+                        <option value="2nd Delivery">2nd Delivery</option>
+                    </select>
+                </div>
+                <div id="product-list" class="divide-y border-t border-slate-100"></div>
+                <textarea id="order-comment" placeholder="Note for kitchen..." class="w-full p-4 bg-slate-50 border rounded-2xl text-sm" rows="2"></textarea>
+                <button id="submit-btn-text" onclick="submitOrder()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm">Place Final Order</button>
+            </div>
+        </div>
+
+        <div id="view-standing" class="hidden space-y-4">
+            <div class="bg-blue-900 text-white p-8 rounded-3xl shadow-xl text-center">
+                <div class="flex flex-wrap gap-2 justify-center mb-6" id="day-selector">
+                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Mon">MON</button>
+                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Tue">TUE</button>
+                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Wed">WED</button>
+                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Thu">THU</button>
+                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Fri">FRI</button>
+                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Sat">SAT</button>
+                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Sun">SUN</button>
+                </div>
+                <div class="space-y-4">
+                    <select id="standing-item" class="w-full p-4 rounded-2xl text-slate-900 font-bold uppercase text-xs"></select>
+                    <div class="flex gap-2">
+                        <select id="standing-slot" class="flex-1 p-4 rounded-2xl text-slate-900 font-bold uppercase text-xs">
+                            <option value="1st Delivery">1st Delivery</option>
+                            <option value="2nd Delivery">2nd Delivery</option>
+                        </select>
+                        <input id="standing-qty" type="number" placeholder="QTY" class="w-24 p-4 rounded-2xl text-slate-900 text-center font-black">
+                    </div>
+                    <button onclick="addStandingOrder()" class="w-full bg-white text-blue-900 font-black py-5 rounded-2xl uppercase shadow-lg">Set Schedule</button>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-3xl shadow-md border border-slate-100 text-left">
+                <div id="standing-items-container" class="space-y-6"></div>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-3xl shadow-md border border-slate-100">
+            <div id="history-container" class="space-y-2 text-left"></div>
+        </div>
+    </div>
+
+    <script>
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        let currentUser = null;
+        let activeProducts = [];
+        let allStandingOrders = [];
+
+        function startApp() {
+            setTomorrowDate();
+            populateSuppliers();
+            loadHistory();
+            loadStandingOrders();
+        }
+
+        async function applyStandingToDaily() {
+            const dateStr = document.getElementById('delivery-date').value;
+            const selectedSlot = document.getElementById('delivery-slot').value;
+            const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr).getDay()];
+            const matches = allStandingOrders.filter(s => s.days_of_week.includes(targetDay) && s.delivery_slot === selectedSlot);
+            
+            if (matches.length === 0) return alert("No standing orders for this slot/day.");
+
+            document.querySelectorAll('#product-list input').forEach(inp => inp.value = "");
+            matches.forEach(s => {
+                const input = Array.from(document.querySelectorAll('#product-list input')).find(i => i.dataset.name === s.item_name);
+                if (input) input.value = s.quantity;
+            });
+            alert("Synced!");
+        }
+
+        async function editOrder(orderId) {
+            const { data } = await _supabase.from('orders').select('*').eq('id', orderId).single();
+            if (data) {
+                editingOrderId = orderId;
+                switchTab('daily');
+                document.getElementById('edit-indicator').classList.remove('hidden');
+                document.getElementById('submit-btn-text').innerText = "Update Existing Order";
+                document.getElementById('delivery-date').value = data.delivery_date;
+                document.getElementById('delivery-slot').value = data.delivery_slot;
+                document.getElementById('order-comment').value = data.comment || "";
+                
+                // Set quantities
+                document.querySelectorAll('#product-list input').forEach(inp => inp.value = "");
+                data.items.forEach(item => {
+                    const input = Array.from(document.querySelectorAll('#product-list input')).find(i => i.dataset.name === item.name);
+                    if (input) input.value = item.quantity;
+                });
+                window.scrollTo(0,0);
+            }
+        }
+
+        async function submitOrder() {
+            const dateStr = document.getElementById('delivery-date').value;
+            const items = [];
+            document.querySelectorAll('#product-list input').forEach(el => {
+                const q = parseInt(el.value) || 0;
+                if(q > 0) items.push({ name: el.dataset.name, quantity: q, unit: el.dataset.unit });
+            });
+            if(items.length === 0) return alert("Enter quantities.");
+
+            const payload = {
+                venue_id: window.currentUser.venue,
+                delivery_date: dateStr,
+                delivery_slot: document.getElementById('delivery-slot').value,
+                items: items,
+                comment: document.getElementById('order-comment').value
+            };
+
+            let res;
+            if (editingOrderId) {
+                res = await _supabase.from('orders').update(payload).eq('id', editingOrderId);
+            } else {
+                res = await _supabase.from('orders').insert([payload]);
+            }
+
+            if (!res.error) {
+                alert("Order Saved!");
+                editingOrderId = null;
+                document.getElementById('edit-indicator').classList.add('hidden');
+                document.getElementById('submit-btn-text').innerText = "Place Final Order";
+                loadHistory();
+                document.querySelectorAll('#product-list input').forEach(i=>i.value="");
+            } else {
+                alert("Error: " + res.error.message);
+            }
+        }
+
+        // Logic for Tabs and Date...
+        function setTomorrowDate() {
+            const tom = new Date(); tom.setDate(tom.getDate() + 1);
+            document.getElementById('delivery-date').value = tom.toISOString().split('T')[0];
+            document.getElementById('admin-view-date').value = tom.toISOString().split('T')[0];
+        }
+
+        function switchTab(view) {
+            document.getElementById('view-daily').classList.toggle('hidden', view !== 'daily');
+            document.getElementById('view-standing').classList.toggle('hidden', view !== 'standing');
+            document.getElementById('tab-daily').className = view === 'daily' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
+            document.getElementById('tab-standing').className = view === 'standing' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
+        }
+
+        function populateSuppliers() {
+            document.getElementById('supplier-select').innerHTML = `<option value="CK">CK</option><option value="DSQ">DSQ</option><option value="GJ">GJ</option>`;
+            loadProducts();
+        }
+
+        async function loadProducts() {
+            const supplier = document.getElementById('supplier-select').value;
+            const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
+            if (data) {
+                activeProducts = data.sort(sortItemsByCustomOrder);
+                const list = document.getElementById('product-list');
+                const drop = document.getElementById('standing-item');
+                list.innerHTML = "";
+                if(drop.innerHTML === "") drop.innerHTML = `<option value="">-- ITEM --</option>`;
+                activeProducts.forEach(p => {
+                    const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
+                    if (p.restricted_to && !allowed.includes(window.currentUser.venue)) return;
+                    list.innerHTML += `<div class="flex justify-between items-center py-4 text-left"><div class="flex-1"><p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p><p class="text-[10px] text-slate-400 mt-1 uppercase font-bold">${p.unit}</p></div><input type="number" data-name="${p.name}" data-unit="${p.unit}" placeholder="0" class="w-16 p-3 bg-slate-50 border-2 rounded-xl text-center font-black text-blue-600"></div>`;
+                    if (!Array.from(drop.options).some(o => o.value === p.name)) drop.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+                });
+            }
+        }
+
+        function toggleDay(btn) { btn.classList.toggle('day-active'); }
+
+        async function addStandingOrder() {
+            const item = document.getElementById('standing-item').value;
+            const slot = document.getElementById('standing-slot').value;
+            const qty = parseInt(document.getElementById('standing-qty').value);
+            const days = Array.from(document.querySelectorAll('.day-active')).map(b => b.dataset.day);
+            if (!item || !qty || days.length === 0) return alert("Missing selections.");
+            const { error } = await _supabase.from('standing_orders').insert([{ venue_id: window.currentUser.venue, item_name: item, quantity: qty, delivery_slot: slot, days_of_week: days.join(', ') }]);
+            if (!error) { alert("Schedule Updated!"); loadStandingOrders(); }
+        }
+
+        async function loadStandingOrders() {
+            const { data } = await _supabase.from('standing_orders').select('*').eq('venue_id', window.currentUser.venue);
+            allStandingOrders = data || [];
+            const cont = document.getElementById('standing-items-container');
+            cont.innerHTML = "";
+            ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach(day => {
+                const dayOrders = allStandingOrders.filter(s => s.days_of_week.includes(day));
+                if (dayOrders.length > 0) {
+                    let dayHtml = `<div class="mb-4 text-left"><h4 class="text-[11px] font-black text-blue-600 uppercase border-b mb-2 pb-1">${day}</h4><div class="space-y-4">`;
+                    ["1st Delivery", "2nd Delivery"].forEach(slot => {
+                        const slotOrders = dayOrders.filter(o => o.delivery_slot === slot).sort(sortItemsByCustomOrder);
+                        if (slotOrders.length > 0) {
+                            dayHtml += `<div class="pl-2 border-l-2 mb-2"><p class="text-[9px] font-bold text-slate-400 uppercase italic mb-1">${slot}</p>`;
+                            slotOrders.forEach(s => dayHtml += `<div class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border mb-1"><div><p class="font-bold text-slate-800 text-[12px] uppercase">${s.item_name} x${s.quantity}</p></div><button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px]">Delete</button></div>`);
+                            dayHtml += `</div>`;
+                        }
+                    });
+                    dayHtml += `</div></div>`;
+                    cont.innerHTML += dayHtml;
+                }
+            });
+        }
+
+        async function deleteStanding(id) {
+            if(confirm("Remove?")) { await _supabase.from('standing_orders').delete().eq('id', id); loadStandingOrders(); }
+        }
+
+        async function generateConsolidatedReport() {
+            const dateStr = document.getElementById('admin-view-date').value;
+            const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr).getDay()];
+            const res = document.getElementById('consolidated-results');
+            res.innerHTML = "LOADING..."; res.classList.remove('hidden');
+
+            const { data: oneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', dateStr);
+            const { data: standings } = await _supabase.from('standing_orders').select('*');
+            const relevant = (standings || []).filter(s => s.days_of_week.includes(targetDay));
+
+            const totals = {}; const venueView = {};
+            relevant.forEach(s => {
+                totals[s.item_name] = (totals[s.item_name] || 0) + s.quantity;
+                if(!venueView[s.venue_id]) venueView[s.venue_id] = [];
+                venueView[s.venue_id].push({ name: s.item_name, qty: s.quantity, type: 'STANDING' });
+            });
+            (oneOffs || []).forEach(o => {
+                o.items.forEach(i => {
+                    totals[i.name] = (totals[i.name] || 0) + i.quantity;
+                    if(!venueView[o.venue_id]) venueView[o.venue_id] = [];
+                    venueView[o.venue_id].push({ name: i.name, qty: i.quantity, type: 'DAILY' });
+                });
+            });
+
+            const sortedTotals = Object.entries(totals).map(([name, qty]) => ({name, qty})).sort(sortItemsByCustomOrder);
+            let html = `<div class="flex justify-between border-b pb-2 mb-4"><h4 class="font-black text-blue-900 uppercase text-[10px]">Master Pick List</h4><button onclick="window.print()" class="underline text-[9px] uppercase">Print</button></div>`;
+            sortedTotals.forEach(item => html += `<div class="flex justify-between border-b py-2 text-sm font-bold"><span>${item.name}</span><span class="text-blue-600">x${item.qty}</span></div>`);
+            
+            html += `<h4 class="font-black border-b mt-8 mb-4 text-blue-900 uppercase text-[10px]">Venue Breakdown</h4>`;
+            for (const [v, items] of Object.entries(venueView)) {
+                items.sort(sortItemsByCustomOrder);
+                html += `<div class="mb-4 bg-slate-50 p-4 border rounded-2xl"><p class="font-black text-blue-700 uppercase italic mb-2 border-b pb-1 text-sm">${v}</p>`;
+                items.forEach(i => html += `<div class="flex justify-between text-xs font-bold py-1"><span>${i.name}</span><span>x${i.qty} (${i.type})</span></div>`);
+                html += `</div>`;
+            }
+            res.innerHTML = html;
+        }
+
+        async function loadHistory() {
+            const { data } = await _supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(10);
+            if(data) document.getElementById('history-container').innerHTML = data.map(o => {
+                const isToday = new Date(o.delivery_date).toDateString() === new Date().toDateString();
+                const now = new Date();
+                const canEdit = !isToday && o.venue_id === window.currentUser.venue && now.getHours() < 13;
+                
+                return `
+                <div class="p-4 bg-slate-50 rounded-2xl border text-xs font-bold mb-2 shadow-sm">
+                    <div class="flex justify-between mb-2 uppercase text-blue-600 tracking-tighter">
+                        <span>${o.venue_id}</span><span>${o.delivery_date}</span>
+                    </div>
+                    <p class="text-slate-800 leading-tight">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</p>
+                    ${canEdit ? `<button onclick="editOrder(${o.id})" class="mt-3 w-full bg-orange-500 text-white py-2 rounded-xl uppercase text-[9px] font-black tracking-widest">Edit Order</button>` : ''}
+                </div>`;
+            }).join('');
+        }
+    </script>
+</body>
+</html>
