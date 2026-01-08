@@ -17,35 +17,58 @@ let allStandingOrders = [];
 let activeProducts = [];
 let originalKitchenVenue = ""; 
 
-// --- LOGIN & STARTUP ---
+// --- SESSION & PERSISTENCE ---
+window.onload = function() {
+    const savedUser = localStorage.getItem('kitchen_portal_user');
+    if (savedUser) {
+        window.currentUser = JSON.parse(savedUser);
+        if (window.currentUser.role === 'kitchen') originalKitchenVenue = window.currentUser.venue;
+        showDashboard();
+    }
+};
+
 window.handleLogin = function() {
     const u = document.getElementById('username').value.toLowerCase().trim();
     const p = document.getElementById('password').value.trim();
     const found = USERS.find(x => x.id === u && x.pw === p);
     if (found) {
-        window.currentUser = JSON.parse(JSON.stringify(found)); 
+        window.currentUser = JSON.parse(JSON.stringify(found));
+        localStorage.setItem('kitchen_portal_user', JSON.stringify(window.currentUser));
         if (found.role === 'kitchen') originalKitchenVenue = found.venue;
-        document.getElementById('login-card').classList.add('hidden');
-        document.getElementById('dashboard').classList.remove('hidden');
-        updateHeader(found.venue);
-        startApp();
+        showDashboard();
     } else { alert("Login failed."); }
 };
 
-function updateHeader(venueName, isOverride = false) {
-    const msg = document.getElementById('welcome-msg');
+window.handleLogout = function() {
+    localStorage.removeItem('kitchen_portal_user');
+    location.reload();
+};
+
+function showDashboard() {
+    document.getElementById('login-card').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
+    document.getElementById('welcome-msg').innerText = window.currentUser.venue;
+    startApp();
+}
+
+function updateOverrideIndicator(venueName, isOverride = false) {
+    const indicator = document.getElementById('override-status-indicator');
     if (isOverride) {
-        // High visibility Red Header for Override Mode
-        msg.innerHTML = `<div class="flex items-center gap-2 text-red-600 font-black">
-                            <span class="animate-ping h-2 w-2 rounded-full bg-red-500"></span>
-                            MANAGING: ${venueName}
-                            <button onclick="resetToKitchen()" class="ml-2 bg-red-600 text-white px-3 py-1 rounded-lg text-[10px] uppercase shadow-lg">Exit</button>
-                         </div>`;
+        indicator.classList.remove('hidden');
+        indicator.innerHTML = `
+            <div class="bg-red-600 text-white p-4 rounded-2xl flex justify-between items-center shadow-lg border-b-4 border-red-800 mb-4">
+                <div class="text-left">
+                    <p class="text-[9px] font-black uppercase tracking-widest opacity-80 mb-1">Override Mode Active</p>
+                    <p class="text-lg font-black tracking-tighter uppercase leading-none">ACTING FOR: ${venueName}</p>
+                </div>
+                <button onclick="resetToKitchen()" class="bg-white text-red-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase shadow-md">Exit</button>
+            </div>`;
     } else {
-        msg.innerHTML = `<span class="text-blue-600">●</span> ${venueName}`;
+        indicator.classList.add('hidden');
     }
 }
 
+// --- CORE APP LOGIC ---
 function startApp() {
     _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     setTomorrowDate();
@@ -53,7 +76,6 @@ function startApp() {
     loadStandingOrders();
 }
 
-// --- HELPERS ---
 function sortItemsByCustomOrder(a, b) {
     const nameA = a.name || a.item_name || "";
     const nameB = b.name || b.item_name || "";
@@ -136,7 +158,6 @@ window.adjustQty = function(itemName, change) {
     }
 };
 
-// --- LOCK LOGIC ---
 function isItemLocked(itemName) {
     if (window.currentUser.role === 'kitchen') return false; 
     const dateStr = document.getElementById('delivery-date').value;
@@ -145,7 +166,6 @@ function isItemLocked(itemName) {
     const today = new Date(); today.setHours(0,0,0,0);
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
     const dayAfter = new Date(today); dayAfter.setDate(today.getDate() + 2);
-
     if (orderDate <= today) return true;
     if (LEAD_2_DAY_ITEMS.includes(itemName)) {
         if (orderDate.getTime() === tomorrow.getTime()) return true;
@@ -161,16 +181,13 @@ function checkFormLock() {
     const today = new Date(); today.setHours(0,0,0,0);
     const now = new Date();
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-    
     let totalLocked = (orderDate <= today) || (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
     const btn = document.getElementById('save-btn'), msg = document.getElementById('lock-msg');
-
     if (totalLocked && window.currentUser.role !== 'kitchen') { 
         btn.classList.add('btn-disabled'); msg.classList.remove('hidden'); 
     } else {
         msg.classList.add('hidden');
     }
-
     activeProducts.forEach(p => {
         const locked = isItemLocked(p.name);
         const input = document.getElementById(`qty-${p.name}`);
@@ -182,19 +199,15 @@ function checkFormLock() {
     });
 }
 
-// --- DAILY ORDER CORE ---
 window.applyStandingToDaily = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr + "T00:00:00").getDay()];
-
     document.querySelectorAll('#product-list input[type="number"]').forEach(i => { i.value = "0"; i.classList.remove('auto-filled'); });
     document.querySelectorAll('.note-input').forEach(i => { i.value = ""; i.style.display = 'none'; });
     document.getElementById('order-comment').value = "";
-
     const { data } = await _supabase.from('orders').select('*').eq('venue_id', window.currentUser.venue).eq('delivery_date', dateStr).eq('delivery_slot', slot).maybeSingle();
     currentDBOrder = data;
-
     if (data) {
         data.items.forEach(item => {
             const inp = document.getElementById(`qty-${item.name}`);
@@ -202,8 +215,7 @@ window.applyStandingToDaily = async function() {
                 inp.value = item.quantity;
                 if (item.comment) { 
                     const note = document.getElementById(`note-${item.name}`); 
-                    note.value = item.comment; 
-                    note.style.display = 'block'; 
+                    note.value = item.comment; note.style.display = 'block'; 
                 }
             }
         });
@@ -232,15 +244,10 @@ window.validateChanges = function() {
     state.push(document.getElementById('order-comment').value);
     const currentFormState = JSON.stringify(state);
     const btn = document.getElementById('save-btn');
-    
-    // REQUESTED CHANGE: Button now always says "Save Changes" instead of "No Changes"
     btn.innerText = "Save Changes";
-
     if (currentFormState !== initialFormState) { 
         btn.classList.remove('btn-disabled'); 
-        if (window.currentUser.role === 'kitchen') {
-            btn.innerText = "Confirm & Save Final Order";
-        }
+        if (window.currentUser.role === 'kitchen') btn.innerText = "Confirm & Save Final Order";
     } else { 
         btn.classList.add('btn-disabled'); 
     }
@@ -252,28 +259,11 @@ window.submitOrder = async function() {
     const items = [];
     document.querySelectorAll('#product-list .item-row').forEach(row => {
         const inp = row.querySelector('input[type="number"]');
-        items.push({ 
-            name: inp.dataset.name, 
-            quantity: parseInt(inp.value) || 0, 
-            comment: row.querySelector('.note-input').value 
-        });
+        items.push({ name: inp.dataset.name, quantity: parseInt(inp.value) || 0, comment: row.querySelector('.note-input').value });
     });
-    
-    const generalNote = document.getElementById('order-comment').value;
-
-    const payload = { 
-        venue_id: window.currentUser.venue, 
-        delivery_date: dateStr, 
-        delivery_slot: slot, 
-        items: items, 
-        comment: generalNote 
-    };
-
+    const payload = { venue_id: window.currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items: items, comment: document.getElementById('order-comment').value };
     let res = currentDBOrder ? await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id) : await _supabase.from('orders').insert([payload]);
-    if (!res.error) { 
-        alert("Final Order Saved!"); 
-        applyStandingToDaily(); 
-    }
+    if (!res.error) { alert("Final Order Saved!"); applyStandingToDaily(); }
 };
 
 // --- CONSOLIDATED REPORT ---
@@ -345,7 +335,7 @@ window.generateConsolidatedReport = async function() {
                         html += `<div class="mb-4"><div class="flex justify-between items-center mb-1 border-l-4 border-blue-400 pl-2"><p class="text-[9px] font-black text-slate-400 italic">${slot}</p>
                                 ${window.currentUser.role === 'kitchen' ? `<button onclick="editVenueOrder('${v}', '${dateStr}', '${slot}')" class="text-[9px] font-black text-blue-600 underline uppercase">✏️ Adjust</button>` : ""}</div>`;
                         activeItems.forEach(i => {
-                            html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-slate-50"><span>${i.name}</span><span>x${i.qty}</span></div>`;
+                            html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-slate-50"><span>${i.name}</span><span class="text-blue-600">x${i.qty}</span></div>`;
                             if(i.note) html += `<p class="text-[10px] text-red-600 italic mb-1 leading-tight">↳ ${i.note}</p>`;
                         });
                         if(vData[slot].note) html += `<div class="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-800 font-bold italic">⚠️ ${vData[slot].note}</div>`;
@@ -360,21 +350,20 @@ window.generateConsolidatedReport = async function() {
 };
 
 window.editVenueOrder = function(venueId, dateStr, slot) {
-    // FORCE Update user and UI
     window.currentUser.venue = venueId;
-    updateHeader(venueId, true);
-    
+    updateOverrideIndicator(venueId, true);
     document.getElementById('delivery-date').value = dateStr;
     document.getElementById('delivery-slot').value = slot;
-    
     window.switchTab('daily');
-    loadProducts(); // This triggers the full reload for the specific venue
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    loadProducts();
+    setTimeout(() => {
+        document.getElementById('override-status-indicator').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 500);
 };
 
 window.resetToKitchen = function() {
     window.currentUser.venue = originalKitchenVenue;
-    updateHeader(originalKitchenVenue, false);
+    updateOverrideIndicator(originalKitchenVenue, false);
     setTomorrowDate();
     loadProducts();
 };
