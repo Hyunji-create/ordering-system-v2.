@@ -13,6 +13,35 @@
 </head>
 <body class="bg-slate-200 min-h-screen p-2 font-sans text-slate-900">
 
+    <script>
+        // --- 1. CONFIGURATION (PUT YOUR KEYS HERE) ---
+        const SUPABASE_URL = 'https://lmkmzcbgzpkprkvrwibn.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxta216Y2JnenBrcHJrdnJ3aWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODU0NzYsImV4cCI6MjA4MzM2MTQ3Nn0.u0cw2sNejJP-21CXNbeT9oYLuwMC8vZc9E23a4VIbOU';
+
+        // --- 2. GLOBAL LOGIN FUNCTION (Defined first so buttons can see it) ---
+        window.handleLogin = function() {
+            const u = document.getElementById('username').value.toLowerCase().trim();
+            const p = document.getElementById('password').value.trim();
+            const found = USERS.find(x => x.id === u && x.pw === p);
+            
+            if (found) {
+                currentUser = found;
+                document.getElementById('login-card').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                document.getElementById('welcome-msg').innerText = found.venue;
+                document.getElementById('user-role-display').innerText = found.role.toUpperCase() + " ACCESS";
+                if (found.role === 'kitchen') document.getElementById('kitchen-admin-section').classList.remove('hidden');
+                
+                // Initialize Data
+                populateSuppliers();
+                loadHistory();
+                loadStandingOrders();
+            } else { 
+                alert("Login failed. Please check your credentials."); 
+            }
+        };
+    </script>
+
     <div id="login-card" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-3xl shadow-2xl text-center">
         <h1 class="text-3xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Kitchen Portal</h1>
         <p class="text-blue-600 font-bold text-[10px] tracking-widest mb-8 uppercase">Internal Operations</p>
@@ -24,7 +53,6 @@
     </div>
 
     <div id="dashboard" class="hidden max-w-2xl mx-auto space-y-4">
-        
         <div class="bg-white p-5 rounded-3xl shadow-sm flex justify-between items-center border-b-4 border-blue-600">
             <div class="text-left">
                 <h1 id="welcome-msg" class="text-2xl font-black text-blue-900 uppercase italic leading-none">VENUE</h1>
@@ -38,8 +66,8 @@
             <button onclick="switchTab('standing')" id="tab-standing" class="py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400 transition-all">🔄 Standing Order</button>
         </div>
 
-        <div id="view-daily" class="space-y-4">
-            <div id="kitchen-admin-section" class="hidden bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
+        <div id="view-daily">
+            <div id="kitchen-admin-section" class="hidden bg-slate-900 text-white p-6 rounded-3xl shadow-xl mb-4">
                 <p class="text-[10px] font-black uppercase mb-4 text-blue-400">Kitchen Admin Console</p>
                 <div class="flex gap-2">
                     <input id="admin-view-date" type="date" class="flex-1 p-3 rounded-xl text-slate-900 font-bold">
@@ -87,22 +115,20 @@
                     <button onclick="addStandingOrder()" class="w-full bg-white text-blue-900 font-black py-5 rounded-2xl uppercase shadow-lg tracking-widest">Add to Schedule</button>
                 </div>
             </div>
-
             <div class="bg-white p-6 rounded-3xl shadow-md border border-slate-100 text-left">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-4">Current Weekly Schedule</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-4">Weekly Schedule</p>
                 <div id="standing-items-container" class="space-y-6"></div>
             </div>
         </div>
 
         <div class="bg-white p-6 rounded-3xl shadow-md border border-slate-100">
-            <p class="text-[10px] font-black text-slate-300 uppercase tracking-widest text-center border-b pb-2 mb-4">Recent Global History</p>
+            <p class="text-[10px] font-black text-slate-300 uppercase tracking-widest text-center border-b pb-2 mb-4">Activity History</p>
             <div id="history-container" class="space-y-2"></div>
         </div>
     </div>
 
     <script>
-        const SUPABASE_URL = 'https://lmkmzcbgzpkprkvrwibn.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxta216Y2JnenBrcHJrdnJ3aWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODU0NzYsImV4cCI6MjA4MzM2MTQ3Nn0.u0cw2sNejJP-21CXNbeT9oYLuwMC8vZc9E23a4VIbOU';
+        // Setup Supabase
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const USERS = [
@@ -118,31 +144,11 @@
         let currentUser = null;
         let activeProducts = [];
 
-        // MOVED TO TOP: Ensure this is defined before the browser reads the buttons
-        window.handleLogin = function() {
-            const u = document.getElementById('username').value.toLowerCase().trim();
-            const p = document.getElementById('password').value.trim();
-            const found = USERS.find(x => x.id === u && x.pw === p);
-            if (found) {
-                currentUser = found;
-                document.getElementById('login-card').classList.add('hidden');
-                document.getElementById('dashboard').classList.remove('hidden');
-                document.getElementById('welcome-msg').innerText = found.venue;
-                document.getElementById('user-role-display').innerText = found.role.toUpperCase() + " ACCESS";
-                if (found.role === 'kitchen') document.getElementById('kitchen-admin-section').classList.remove('hidden');
-                populateSuppliers();
-                loadHistory();
-                loadStandingOrders();
-            } else { alert("Login failed."); }
-        };
-
-        window.onload = function() { setTomorrowDate(); };
-
         function setTomorrowDate() {
             const tom = new Date(); tom.setDate(tom.getDate() + 1);
             const iso = tom.toISOString().split('T')[0];
-            if(document.getElementById('delivery-date')) document.getElementById('delivery-date').value = iso;
-            if(document.getElementById('admin-view-date')) document.getElementById('admin-view-date').value = iso;
+            document.getElementById('delivery-date').value = iso;
+            document.getElementById('admin-view-date').value = iso;
         }
 
         function switchTab(view) {
@@ -169,7 +175,7 @@
                 data.forEach(p => {
                     const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
                     if (p.restricted_to && !allowed.includes(currentUser.venue)) return;
-                    list.innerHTML += `<div class="flex justify-between items-center py-4"><div class="text-left"><p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p><p class="text-[10px] text-slate-400 mt-1 uppercase font-bold">${p.unit}</p></div><input type="number" id="qty-${p.id}" data-pid="${p.id}" data-name="${p.name}" data-unit="${p.unit}" placeholder="0" class="w-16 p-3 bg-slate-50 border-2 rounded-xl text-center font-bold text-blue-600 outline-none focus:border-blue-500"></div>`;
+                    list.innerHTML += `<div class="flex justify-between items-center py-4"><div class="text-left"><p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p><p class="text-[10px] text-slate-400 mt-1 uppercase font-bold">${p.unit}</p></div><input type="number" id="qty-${p.id}" data-pid="${p.id}" data-name="${p.name}" data-unit="${p.unit}" placeholder="0" class="w-16 p-3 bg-slate-50 border-2 rounded-xl text-center font-bold text-blue-600"></div>`;
                     if (!Array.from(drop.options).some(o => o.value === p.name)) drop.innerHTML += `<option value="${p.name}">${p.name}</option>`;
                 });
             }
@@ -191,13 +197,9 @@
             const { data } = await _supabase.from('standing_orders').select('*').eq('venue_id', currentUser.venue);
             const cont = document.getElementById('standing-items-container');
             cont.innerHTML = "";
-            if (!data || data.length === 0) {
-                cont.innerHTML = `<p class="text-center py-4 text-slate-300 text-[10px] italic">No active standing schedules.</p>`;
-                return;
-            }
             const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
             weekDays.forEach(day => {
-                const dayOrders = data.filter(s => s.days_of_week.includes(day));
+                const dayOrders = (data || []).filter(s => s.days_of_week.includes(day));
                 if (dayOrders.length > 0) {
                     let dayHtml = `<div class="mb-4"><h4 class="text-[11px] font-black text-blue-600 uppercase border-b-2 border-blue-50 mb-2 pb-1">${day} Orders</h4><div class="space-y-2">`;
                     dayOrders.forEach(s => {
@@ -210,10 +212,7 @@
         }
 
         async function deleteStanding(id) {
-            if(confirm("Permanently remove this item from your weekly schedule?")) { 
-                await _supabase.from('standing_orders').delete().eq('id', id); 
-                loadStandingOrders(); 
-            }
+            if(confirm("Remove this item?")) { await _supabase.from('standing_orders').delete().eq('id', id); loadStandingOrders(); }
         }
 
         async function submitOrder() {
@@ -223,16 +222,14 @@
                 const q = parseInt(el.value) || 0;
                 if(q > 0) items.push({ name: el.dataset.name, quantity: q, unit: el.dataset.unit });
             });
-            if(items.length === 0) return alert("Enter quantities first.");
+            if(items.length === 0) return alert("Enter quantities.");
             const { error } = await _supabase.from('orders').insert([{ venue_id: currentUser.venue, delivery_date: dateStr, delivery_slot: document.getElementById('delivery-slot').value, items, comment: document.getElementById('order-comment').value }]);
-            if(!error) { alert("Order Sent!"); loadHistory(); document.querySelectorAll('#product-list input').forEach(i=>i.value=""); }
+            if(!error) { alert("Sent!"); loadHistory(); document.querySelectorAll('#product-list input').forEach(i=>i.value=""); }
         }
 
         async function generateConsolidatedReport() {
             const dateStr = document.getElementById('admin-view-date').value;
-            const targetDate = new Date(dateStr);
-            const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-            const targetDay = dayNames[targetDate.getDay()];
+            const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr).getDay()];
             const res = document.getElementById('consolidated-results');
             res.innerHTML = "LOADING..."; res.classList.remove('hidden');
 
@@ -246,7 +243,7 @@
                 if(!venueView[s.venue_id]) venueView[s.venue_id] = [];
                 venueView[s.venue_id].push({ name: s.item_name, qty: s.quantity, type: 'STANDING' });
             });
-            oneOffs.forEach(o => {
+            (oneOffs || []).forEach(o => {
                 o.items.forEach(i => {
                     totals[i.name] = (totals[i.name] || 0) + i.quantity;
                     if(!venueView[o.venue_id]) venueView[o.venue_id] = [];
@@ -254,12 +251,12 @@
                 });
             });
 
-            let html = `<h4 class="font-black border-b mb-2 text-blue-900 uppercase text-xs">Pick List</h4>`;
+            let html = `<h4 class="font-black border-b mb-2 text-blue-900 text-xs">Pick List</h4>`;
             for (const [n, q] of Object.entries(totals)) html += `<div class="flex justify-between border-b py-2 text-sm font-bold"><span>${n}</span><span>x${q}</span></div>`;
-            html += `<h4 class="font-black border-b mt-6 mb-2 text-blue-900 uppercase text-xs">Venue Breakdown</h4>`;
+            html += `<h4 class="font-black border-b mt-6 mb-2 text-blue-900 text-xs">Breakdown</h4>`;
             for (const [v, items] of Object.entries(venueView)) {
-                html += `<div class="mb-4 bg-slate-50 p-4 border rounded-2xl"><p class="font-black text-blue-700 uppercase mb-2 italic border-b pb-1 text-sm">${v}</p>`;
-                items.forEach(i => html += `<div class="flex justify-between text-xs font-bold py-1"><span>${i.name}</span><span>x${i.qty} (${i.type})</span></div>`);
+                html += `<div class="mb-4 bg-slate-50 p-4 border rounded-2xl"><p class="font-black text-blue-700 uppercase mb-2 text-sm">${v}</p>`;
+                items.forEach(i => html += `<div class="flex justify-between text-xs font-bold"><span>${i.name}</span><span>x${i.qty} (${i.type})</span></div>`);
                 html += `</div>`;
             }
             res.innerHTML = html;
@@ -267,7 +264,7 @@
 
         async function loadHistory() {
             const { data } = await _supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(10);
-            if(data) document.getElementById('history-container').innerHTML = data.map(o => `<div class="p-3 bg-slate-50 rounded-xl border text-xs font-bold text-left shadow-sm mb-2"><div class="flex justify-between mb-1 uppercase text-blue-600 tracking-tighter"><span class="font-black text-[10px]">${o.venue_id}</span><span class="text-slate-400 opacity-70">DEL: ${o.delivery_date}</span></div><p class="text-slate-800 leading-tight">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</p></div>`).join('');
+            if(data) document.getElementById('history-container').innerHTML = data.map(o => `<div class="p-3 bg-slate-50 rounded-xl border text-xs font-bold mb-2 shadow-sm"><div class="flex justify-between mb-1 uppercase text-blue-600"><span class="font-black">${o.venue_id}</span><span>DEL: ${o.delivery_date}</span></div><p class="text-slate-800">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</p></div>`).join('');
         }
     </script>
 </body>
