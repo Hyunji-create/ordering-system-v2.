@@ -144,44 +144,43 @@
 
         async function applyStandingToDaily() {
             const dateStr = document.getElementById('delivery-date').value;
+            const selectedSlot = document.getElementById('delivery-slot').value; // Get the slot (1st or 2nd)
             const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr).getDay()];
             
-            // Filter current user's standing orders for that specific day
-            const matches = allStandingOrders.filter(s => s.days_of_week.includes(targetDay));
+            // 1. Filter by Day AND Slot
+            const matches = allStandingOrders.filter(s => 
+                s.days_of_week.includes(targetDay) && 
+                s.delivery_slot === selectedSlot
+            );
             
             if (matches.length === 0) {
-                alert("No standing orders found for this day of the week.");
+                alert(`No standing orders found for ${targetDay} during ${selectedSlot}.`);
                 return;
             }
 
-            // Reset all current inputs to 0 first
+            // 2. Clear current inputs
             document.querySelectorAll('#product-list input').forEach(inp => {
                 inp.value = "";
                 inp.classList.remove('bg-blue-50', 'border-blue-300');
             });
 
-            // Create a temporary object to sum totals per item
-            const totalsForDay = {};
-            matches.forEach(s => {
-                totalsForDay[s.item_name] = (totalsForDay[s.item_name] || 0) + s.quantity;
-            });
-
-            // Apply the SUMMED totals to the inputs
-            const inputs = document.querySelectorAll('#product-list input');
+            // 3. Apply exact matches
             let itemsSynced = 0;
-            
-            inputs.forEach(inp => {
-                const itemName = inp.dataset.name;
-                if (totalsForDay[itemName]) {
-                    inp.value = totalsForDay[itemName];
-                    inp.classList.add('bg-blue-50', 'border-blue-300');
-                    itemsSynced++;
-                }
+            matches.forEach(s => {
+                const inputs = document.querySelectorAll('#product-list input');
+                inputs.forEach(inp => {
+                    if (inp.dataset.name === s.item_name) {
+                        // If multiple standing orders exist for the same item in the same slot, sum them
+                        const currentVal = parseInt(inp.value) || 0;
+                        inp.value = currentVal + s.quantity;
+                        inp.classList.add('bg-blue-50', 'border-blue-300');
+                        itemsSynced++;
+                    }
+                });
             });
 
-            alert(`Synced ${itemsSynced} items for ${targetDay}. Total Matcha is now summed to ${totalsForDay['Matcha'] || 0}.`);
+            alert(`Synced ${itemsSynced} items for ${targetDay} (${selectedSlot}).`);
         }
-
         function setTomorrowDate() {
             const tom = new Date(); tom.setDate(tom.getDate() + 1);
             document.getElementById('delivery-date').value = tom.toISOString().split('T')[0];
