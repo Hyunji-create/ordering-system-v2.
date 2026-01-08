@@ -1,14 +1,51 @@
 /* Tab Styling */
-.tab-active { background-color: #1e40af !important; color: white !important; border-bottom: 6px solid #fbbf24; }
-.day-active { background-color: #fbbf24 !important; color: black !important; border-color: #b45309 !important; transform: scale(0.95); }
+.tab-active { 
+    background-color: #1e40af !important; 
+    color: white !important; 
+    border-bottom: 6px solid #fbbf24; 
+}
+
+.day-active { 
+    background-color: #fbbf24 !important; 
+    color: black !important; 
+    border-color: #b45309 !important; 
+    transform: scale(0.95); 
+}
 
 /* Note Inputs */
-.note-input { font-size: 11px; padding: 6px; border-radius: 8px; border: 1px solid #e2e8f0; width: 100%; margin-top: 6px; display: none; background: #fffbeb; }
+.note-input { 
+    font-size: 11px; 
+    padding: 6px; 
+    border-radius: 8px; 
+    border: 1px solid #e2e8f0; 
+    width: 100%; 
+    margin-top: 6px; 
+    display: none; 
+    background: #fffbeb; 
+}
 
 /* Status Classes */
-.btn-disabled { background-color: #cbd5e1 !important; cursor: not-allowed; pointer-events: none; }
-.auto-filled { background-color: #f0f9ff !important; border-color: #7dd3fc !important; }
-.locked-qty { opacity: 0.6; pointer-events: none; background-color: #f1f5f9 !important; }
+.btn-disabled { 
+    background-color: #cbd5e1 !important; 
+    cursor: not-allowed; 
+    pointer-events: none; 
+    opacity: 0.7;
+}
+
+.auto-filled { 
+    background-color: #f0f9ff !important; 
+    border-color: #7dd3fc !important; 
+    color: #0369a1 !important;
+}
+
+/* Visual lock for inputs when past cutoff */
+.locked-qty { 
+    opacity: 0.5; 
+    pointer-events: none; 
+    background-color: #f1f5f9 !important; 
+    border-style: dashed !important;
+}
+
 .item-row:hover { background-color: #f8fafc; }
 
 /* Custom Qty Adjustments & Mobile Keypad Fix */
@@ -38,9 +75,31 @@ input[type=number] {
     user-select: none;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    transition: all 0.1s ease;
 }
 
 .qty-btn:active {
     background-color: #e2e8f0;
-    transform: scale(0.95);
+    transform: scale(0.9);
+}
+
+/* Override Mode Animation */
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+#override-status-indicator:not(.hidden) {
+    animation: pulse-red 2s infinite;
+    border-radius: 1rem;
+}
+
+/* Print Styling */
+@media print {
+    #login-card, #save-btn, .qty-btn, #summary-section, .grid, #tab-daily, #tab-standing {
+        display: none !important;
+    }
+    body { background: white; padding: 0; }
+    #consolidated-results { display: block !important; width: 100%; box-shadow: none; border: none; }
 }
