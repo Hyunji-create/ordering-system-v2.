@@ -155,20 +155,31 @@
             }
 
             // Reset all current inputs to 0 first
-            document.querySelectorAll('#product-list input').forEach(inp => inp.value = "");
-
-            // Apply standing quantities to the inputs
-            matches.forEach(s => {
-                const inputs = document.querySelectorAll('#product-list input');
-                inputs.forEach(inp => {
-                    if (inp.dataset.name === s.item_name) {
-                        inp.value = s.quantity;
-                        // Visual feedback
-                        inp.classList.add('bg-blue-50', 'border-blue-300');
-                    }
-                });
+            document.querySelectorAll('#product-list input').forEach(inp => {
+                inp.value = "";
+                inp.classList.remove('bg-blue-50', 'border-blue-300');
             });
-            alert(`Applied ${matches.length} items from your ${targetDay} schedule. You can now adjust the numbers.`);
+
+            // Create a temporary object to sum totals per item
+            const totalsForDay = {};
+            matches.forEach(s => {
+                totalsForDay[s.item_name] = (totalsForDay[s.item_name] || 0) + s.quantity;
+            });
+
+            // Apply the SUMMED totals to the inputs
+            const inputs = document.querySelectorAll('#product-list input');
+            let itemsSynced = 0;
+            
+            inputs.forEach(inp => {
+                const itemName = inp.dataset.name;
+                if (totalsForDay[itemName]) {
+                    inp.value = totalsForDay[itemName];
+                    inp.classList.add('bg-blue-50', 'border-blue-300');
+                    itemsSynced++;
+                }
+            });
+
+            alert(`Synced ${itemsSynced} items for ${targetDay}. Total Matcha is now summed to ${totalsForDay['Matcha'] || 0}.`);
         }
 
         function setTomorrowDate() {
