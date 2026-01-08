@@ -93,7 +93,7 @@
 
     <script src="config.js"></script>
     <script>
-        // Create the global Supabase client IMMEDIATELY after config.js
+        // Initialize Supabase immediately so other files can see it
         window._supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     </script>
     <script src="ui.js"></script>
