@@ -63,13 +63,14 @@ window.switchTab = function(view) {
 
 // PRODUCT LOADING
 async function populateSuppliers() {
-    document.getElementById('supplier-select').innerHTML = `<option value="CK">CK</option><option value="DSQ">DSQ</option><option value="GJ">GJ</option>`;
+    const select = document.getElementById('supplier-select');
+    if(!select.innerHTML) select.innerHTML = `<option value="CK">CK</option><option value="DSQ">DSQ</option><option value="GJ">GJ</option>`;
     loadProducts();
 }
 
 async function loadProducts() {
     const supplier = document.getElementById('supplier-select').value;
-    const { data, error } = await _supabase.from('products').select('*').eq('supplier', supplier);
+    const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
     if (data) {
         activeProducts = data.sort(sortItemsByCustomOrder);
         const list = document.getElementById('product-list');
@@ -200,6 +201,7 @@ window.applyStandingToDaily = async function() {
 function captureState() {
     const state = [];
     document.querySelectorAll('#product-list input').forEach(i => state.push(i.value));
+    document.querySelectorAll('.note-input').forEach(i => state.push(i.value));
     initialFormState = JSON.stringify(state);
     validateChanges();
 }
@@ -207,6 +209,7 @@ function captureState() {
 window.validateChanges = function() {
     const state = [];
     document.querySelectorAll('#product-list input').forEach(i => state.push(i.value));
+    document.querySelectorAll('.note-input').forEach(i => state.push(i.value));
     const currentFormState = JSON.stringify(state);
     const btn = document.getElementById('save-btn');
     const isLocked = checkFormLock();
@@ -254,14 +257,14 @@ window.generateConsolidatedReport = async function() {
         VENUES.forEach(v => venueReport[v] = { "1st Delivery": [], "2nd Delivery": [] });
 
         (standings || []).forEach(s => {
-            if(s.days_of_week.includes(targetDay)) {
+            if(s.days_of_week && s.days_of_week.includes(targetDay)) {
                 if(venueReport[s.venue_id]) venueReport[s.venue_id][s.delivery_slot].push({ name: s.item_name, qty: s.quantity });
             }
         });
 
         (oneOffs || []).forEach(o => {
             if(venueReport[o.venue_id]) {
-                venueReport[o.venue_id][o.delivery_slot] = o.items.map(i => ({ name: i.name, qty: i.quantity, note: i.comment }));
+                venueReport[o.venue_id][o.delivery_slot] = o.items.map(i => ({ name: i.name, qty: i.quantity, note: i.comment || "" }));
             }
         });
 
@@ -271,14 +274,14 @@ window.generateConsolidatedReport = async function() {
             const vData = venueReport[v];
             const hasOrders = vData["1st Delivery"].length > 0 || vData["2nd Delivery"].length > 0;
             if(hasOrders) {
-                html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-slate-50 text-left border-slate-100"><h3 class="font-black text-blue-800 text-lg border-b mb-3 italic">${v}</h3>`;
+                html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-slate-50 text-left border-slate-100 shadow-inner"><h3 class="font-black text-blue-800 text-lg border-b pb-1 mb-3 italic">${v}</h3>`;
                 ["1st Delivery", "2nd Delivery"].forEach(slot => {
                     const items = vData[slot].filter(i => i.qty > 0).sort(sortItemsByCustomOrder);
                     if(items.length > 0) {
                         html += `<div class="mb-3"><p class="text-[9px] font-black text-slate-400 uppercase italic mb-1 border-l-4 border-blue-400 pl-2">${slot}</p>`;
                         items.forEach(i => {
                             html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-white"><span>${i.name}</span><span class="text-blue-600">x${i.qty}</span></div>`;
-                            if(i.note) html += `<p class="text-[10px] text-red-600 font-bold italic mb-1 leading-tight">↳ ${i.note}</p>`;
+                            if(i.note && i.note.trim() !== "") html += `<p class="text-[10px] text-red-600 font-bold italic mb-1 leading-tight">↳ ${i.note}</p>`;
                         });
                         html += `</div>`;
                     }
@@ -294,7 +297,6 @@ window.generateConsolidatedReport = async function() {
 };
 
 async function loadHistory() {
-    // Only current venue history for activity tracking
     const { data } = await _supabase.from('orders').select('*').eq('venue_id', currentUser.venue).order('created_at', { ascending: false }).limit(5);
     const cont = document.getElementById('history-container');
     if(data && cont) {
