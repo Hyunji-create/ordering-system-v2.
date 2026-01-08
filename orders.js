@@ -3,9 +3,21 @@
 const PRODUCT_ORDER = ["Matcha", "Hojicha", "Strawberry Puree", "Chia Pudding", "Mango Puree", "Vanilla Syrup", "Simple Syrup", "Ice"];
 const LEAD_2_DAY_ITEMS = ["Vanilla Syrup", "Simple Syrup", "Yuzu Juice"];
 
-// 1. Check if a specific item should be locked for the chosen date
+// Make this visible to app.js
+window.setTomorrowDate = function() {
+    const tom = new Date(); 
+    tom.setDate(tom.getDate() + 1);
+    const iso = tom.toISOString().split('T')[0];
+    
+    const deliveryInput = document.getElementById('delivery-date');
+    const adminInput = document.getElementById('admin-view-date');
+    
+    if (deliveryInput) deliveryInput.value = iso;
+    if (adminInput) adminInput.value = iso;
+};
+
 window.isItemLocked = function(itemName) {
-    if (window.currentUser.role === 'kitchen') return false; // Kitchen managers bypass all locks
+    if (window.currentUser.role === 'kitchen') return false; 
     
     const dateStr = document.getElementById('delivery-date').value;
     const now = new Date();
@@ -14,22 +26,18 @@ window.isItemLocked = function(itemName) {
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
     const dayAfter = new Date(today); dayAfter.setDate(today.getDate() + 2);
 
-    // Lock if date is today or in the past
     if (orderDate <= today) return true;
 
-    // 2-Day Lead Time Logic
     if (LEAD_2_DAY_ITEMS.includes(itemName)) {
-        if (orderDate.getTime() === tomorrow.getTime()) return true; // Always locked for tomorrow
-        if (orderDate.getTime() === dayAfter.getTime() && now.getHours() >= 13) return true; // Locked for day-after if past 1pm
+        if (orderDate.getTime() === tomorrow.getTime()) return true;
+        if (orderDate.getTime() === dayAfter.getTime() && now.getHours() >= 13) return true;
     }
 
-    // Standard 24h Logic
     if (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13) return true;
 
     return false;
 };
 
-// 2. Adjust Quantity (+/- buttons)
 window.adjustQty = function(itemName, change) {
     if (window.currentUser.role !== 'kitchen' && isItemLocked(itemName)) return;
     
@@ -42,7 +50,6 @@ window.adjustQty = function(itemName, change) {
     }
 };
 
-// 3. Populate Supplier Dropdown
 window.populateSuppliers = function() {
     const select = document.getElementById('supplier-select');
     if(select && !select.innerHTML) {
@@ -51,7 +58,6 @@ window.populateSuppliers = function() {
     loadProducts();
 };
 
-// 4. Load Products and Render Rows
 window.loadProducts = async function() {
     const supplier = document.getElementById('supplier-select').value;
     const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
@@ -91,7 +97,6 @@ window.loadProducts = async function() {
     }
 };
 
-// 5. Final Order Submission
 window.submitOrder = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
@@ -126,7 +131,6 @@ window.submitOrder = async function() {
     }
 };
 
-// 6. Form Lock Styling Logic
 window.checkFormLock = function() {
     const dateStr = document.getElementById('delivery-date').value;
     const orderDate = new Date(dateStr + "T00:00:00");
@@ -152,4 +156,9 @@ window.checkFormLock = function() {
             else { input.classList.remove('locked-qty'); btns.forEach(b => b.classList.remove('opacity-30', 'pointer-events-none')); }
         }
     });
+};
+
+window.toggleNote = function(name) {
+    const el = document.getElementById(`note-${name}`);
+    if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
 };
