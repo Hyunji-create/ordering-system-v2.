@@ -7,15 +7,15 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-slate-100 min-h-screen p-4 pb-20 font-sans text-slate-900 text-center">
+<body class="bg-slate-100 min-h-screen p-4 pb-20 font-sans text-slate-900">
 
-    <div id="login-card" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-2xl shadow-xl border border-slate-200">
-        <h1 class="text-2xl font-bold text-slate-800 mb-2 font-serif tracking-tight text-center">BOH Master Portal</h1>
+    <div id="login-card" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-2xl shadow-xl border border-slate-200 text-center">
+        <h1 class="text-2xl font-bold text-slate-800 mb-2 font-serif tracking-tight">BOH Master Portal</h1>
         <p class="text-slate-500 mb-8 text-[10px] tracking-widest uppercase font-bold text-blue-600 text-center">Internal Operations</p>
         <div class="space-y-4">
             <input id="username" type="text" placeholder="User ID" class="w-full p-4 border rounded-xl uppercase outline-none focus:ring-2 focus:ring-blue-600 shadow-sm text-center">
             <input id="password" type="password" placeholder="Password" class="w-full p-4 border rounded-xl outline-none focus:ring-2 focus:ring-blue-600 shadow-sm text-center">
-            <button id="login-btn" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl hover:bg-black transition-all shadow-lg active:scale-95 uppercase tracking-widest">Sign In</button>
+            <button onclick="handleLogin()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl hover:bg-black transition-all shadow-lg active:scale-95 uppercase tracking-widest">Sign In</button>
         </div>
     </div>
 
@@ -33,18 +33,17 @@
                 <h2 class="text-xs font-black uppercase tracking-widest mb-4 opacity-70">Kitchen Command Center</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input id="admin-view-date" type="date" class="p-3 rounded-lg text-slate-900 text-sm font-bold w-full">
-                    <button id="view-consolidated-btn" class="bg-white text-blue-900 font-bold p-3 rounded-lg text-xs uppercase hover:bg-blue-50">Generate Master List</button>
+                    <button onclick="generateConsolidatedReport()" class="bg-white text-blue-900 font-bold p-3 rounded-lg text-xs uppercase hover:bg-blue-50">Generate Master List</button>
                 </div>
             </div>
-            <div id="consolidated-results" class="hidden bg-white p-6 rounded-2xl border-2 border-blue-900 shadow-sm text-left">
-                </div>
+            <div id="consolidated-results" class="hidden bg-white p-6 rounded-2xl border-2 border-blue-900 shadow-sm text-left"></div>
         </div>
 
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Supplier</label>
-                    <select id="supplier-select" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-600">
+                    <select id="supplier-select" onchange="loadProducts()" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold">
                         <option value="CK">Central Kitchen (CK)</option>
                         <option value="DSQ">DSQ Kitchen (DSQ)</option>
                         <option value="GJ">Gojima Supplier (GJ)</option>
@@ -52,7 +51,7 @@
                 </div>
                 <div>
                     <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Delivery Date</label>
-                    <input id="delivery-date" type="date" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-600 text-center shadow-sm">
+                    <input id="delivery-date" type="date" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold text-center shadow-sm">
                 </div>
                 <div>
                     <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Slot</label>
@@ -66,31 +65,30 @@
             <div id="product-list" class="space-y-1 border-t pt-4 min-h-[100px]"></div>
 
             <div class="space-y-4">
-                <textarea id="order-comment" placeholder="Leave a comment for special requests or edit requests..." class="w-full p-4 bg-slate-50 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-600" rows="2"></textarea>
+                <textarea id="order-comment" placeholder="Special requests or edit requests..." class="w-full p-4 bg-slate-50 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-600" rows="2"></textarea>
                 
                 <div class="flex items-center space-x-2 bg-yellow-50 p-3 rounded-xl border border-yellow-100">
                     <input type="checkbox" id="save-standing-order" class="w-4 h-4">
-                    <label for="save-standing-order" class="text-[10px] font-bold uppercase text-yellow-700">Save this as my Standing Order</label>
+                    <label for="save-standing-order" class="text-[10px] font-bold uppercase text-yellow-700">Save as Standing Order</label>
                 </div>
 
                 <div class="flex space-x-2">
-                    <button id="load-standing-btn" class="flex-1 bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-[10px] uppercase tracking-widest hover:bg-slate-300">Load Standing</button>
-                    <button id="submit-btn" class="flex-[2] bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition-all active:scale-95 uppercase tracking-widest text-xs">Submit Order</button>
+                    <button onclick="loadStandingOrder()" class="flex-1 bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-[10px] uppercase tracking-widest">Load Standing</button>
+                    <button onclick="submitOrder()" class="flex-[2] bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition-all uppercase tracking-widest text-xs">Submit Order</button>
                 </div>
             </div>
         </div>
 
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <h2 class="text-[10px] font-black uppercase text-slate-400 mb-4 tracking-[0.2em] border-b pb-2">Recent Global activity</h2>
-            <div id="history-container" class="space-y-3"></div>
+            <h2 class="text-[10px] font-black uppercase text-slate-400 mb-4 tracking-[0.2em] border-b pb-2 text-center">Recent Global Activity</h2>
+            <div id="history-container" class="space-y-3 text-left"></div>
         </div>
     </div>
 
     <script>
         const SUPABASE_URL = 'https://lmkmzcbgzpkprkvrwibn.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxta216Y2JnenBrcHJrdnJ3aWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODU0NzYsImV4cCI6MjA4MzM2MTQ3Nn0.u0cw2sNejJP-21CXNbeT9oYLuwMC8vZc9E23a4VIbOU';
-        const { createClient } = supabase;
-        const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const USERS = [
             { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'venue' },
@@ -105,20 +103,6 @@
         let currentUser = null;
         let activeProducts = [];
 
-        window.onload = function() {
-            document.getElementById('login-btn').onclick = handleLogin;
-            document.getElementById('submit-btn').onclick = submitOrder;
-            document.getElementById('supplier-select').onchange = loadProducts;
-            document.getElementById('view-consolidated-btn').onclick = generateConsolidatedReport;
-            document.getElementById('load-standing-btn').onclick = loadStandingOrder;
-            
-            // Set default date to tomorrow
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            document.getElementById('delivery-date').value = tomorrow.toISOString().split('T')[0];
-            document.getElementById('admin-view-date').value = tomorrow.toISOString().split('T')[0];
-        };
-
         function handleLogin() {
             const u = document.getElementById('username').value.toLowerCase().trim();
             const p = document.getElementById('password').value.trim();
@@ -129,12 +113,8 @@
                 document.getElementById('login-card').classList.add('hidden');
                 document.getElementById('dashboard').classList.remove('hidden');
                 document.getElementById('welcome-msg').innerText = "Venue: " + found.venue;
-                document.getElementById('user-role-display').innerText = found.role + " ACCESS";
-                
-                if (found.role === 'kitchen') {
-                    document.getElementById('kitchen-admin-section').classList.remove('hidden');
-                }
-                
+                document.getElementById('user-role-display').innerText = (found.role === 'kitchen' ? 'KITCHEN' : 'VENUE') + " ACCESS";
+                if (found.role === 'kitchen') document.getElementById('kitchen-admin-section').classList.remove('hidden');
                 loadProducts();
                 loadHistory();
             } else { alert("Login Failed"); }
@@ -143,8 +123,7 @@
         async function loadProducts() {
             const supplier = document.getElementById('supplier-select').value;
             const container = document.getElementById('product-list');
-            container.innerHTML = `<p class="p-10 text-xs animate-pulse">Syncing Inventory...</p>`;
-
+            container.innerHTML = `<p class="p-10 text-xs animate-pulse text-center">Syncing Inventory...</p>`;
             const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
             if (data) {
                 activeProducts = data;
@@ -152,13 +131,13 @@
                 data.forEach(prod => {
                     if (prod.restricted_to && !prod.restricted_to.split(',').map(v=>v.trim()).includes(currentUser.venue)) return;
                     const div = document.createElement('div');
-                    div.className = "flex items-center justify-between p-3 border-b border-slate-50 hover:bg-slate-50/50";
+                    div.className = "flex items-center justify-between p-3 border-b border-slate-50";
                     div.innerHTML = `
                         <div class="text-left">
-                            <p class="text-[13px] font-bold text-slate-800 uppercase">${prod.name}</p>
-                            <p class="text-[9px] text-slate-400 font-bold uppercase">${prod.unit} ${prod.lead_time > 1 ? `<span class="text-orange-600 ml-1">(${prod.lead_time}d)</span>` : ''}</p>
+                            <p class="text-[13px] font-bold text-slate-800 uppercase leading-none">${prod.name}</p>
+                            <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">${prod.unit} ${prod.lead_time > 1 ? `<span class="text-orange-600">(${prod.lead_time}d)</span>` : ''}</p>
                         </div>
-                        <input type="number" id="qty-${prod.id}" data-pid="${prod.id}" data-name="${prod.name}" data-unit="${prod.unit}" min="0" placeholder="0" class="w-14 p-2 bg-white border border-slate-200 rounded-lg text-center font-bold text-blue-600 outline-none focus:ring-1 focus:ring-blue-500">
+                        <input type="number" id="qty-${prod.id}" data-pid="${prod.id}" data-name="${prod.name}" data-unit="${prod.unit}" min="0" placeholder="0" class="w-14 p-2 border rounded-lg text-center font-bold text-blue-600 outline-none">
                     `;
                     container.appendChild(div);
                 });
@@ -168,36 +147,29 @@
         async function submitOrder() {
             const dateStr = document.getElementById('delivery-date').value;
             if (!dateStr) return alert("Select Date");
-
             const now = new Date();
             const selectedDate = new Date(dateStr);
             selectedDate.setHours(0,0,0,0);
             const today = new Date(); today.setHours(0,0,0,0);
             const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-
             const isKitchen = (currentUser.role === 'kitchen');
-
-            if (selectedDate <= today && !isKitchen) return alert("Cutoff passed. Use comments or call kitchen.");
+            if (selectedDate <= today && !isKitchen) return alert("Too late for today.");
             if (selectedDate.getTime() === tomorrow.getTime() && now.getHours() >= 13 && !isKitchen) return alert("Past 1PM cutoff.");
 
             const orderItems = [];
-            let ltViolation = false;
-            
-            // Get all inputs
             const inputs = document.querySelectorAll('#product-list input');
+            let ltViolation = false;
+
             inputs.forEach(el => {
                 const q = parseInt(el.value) || 0;
                 if (q > 0) {
                     const p = activeProducts.find(x => x.id == el.dataset.pid);
-                    if (p) {
+                    if (p && !isKitchen) {
                         const minDate = new Date(today);
                         minDate.setDate(today.getDate() + (p.lead_time || 1));
-                        if (selectedDate < minDate && !isKitchen) {
-                            alert(`LEAD ERROR: ${p.name}`);
-                            ltViolation = true;
-                        }
-                        orderItems.push({ name: p.name, quantity: q, unit: p.unit });
+                        if (selectedDate < minDate) { alert(`LEAD ERROR: ${p.name}`); ltViolation = true; }
                     }
+                    orderItems.push({ name: el.dataset.name, quantity: q, unit: el.dataset.unit });
                 }
             });
 
@@ -215,7 +187,12 @@
                 localStorage.setItem(`standing_${currentUser.venue}`, JSON.stringify(orderItems));
             }
 
-            if (!error) { alert("Sent!"); loadHistory(); }
+            if (!error) { 
+                alert("ORDER SENT!"); 
+                loadHistory(); 
+                inputs.forEach(i => i.value = ""); 
+                document.getElementById('order-comment').value = "";
+            }
         }
 
         function loadStandingOrder() {
@@ -224,9 +201,7 @@
             const items = JSON.parse(raw);
             items.forEach(item => {
                 const inputs = document.querySelectorAll('#product-list input');
-                inputs.forEach(inp => {
-                    if (inp.dataset.name === item.name) inp.value = item.quantity;
-                });
+                inputs.forEach(inp => { if (inp.dataset.name === item.name) inp.value = item.quantity; });
             });
             alert("Standing order loaded!");
         }
@@ -234,43 +209,48 @@
         async function generateConsolidatedReport() {
             const date = document.getElementById('admin-view-date').value;
             const container = document.getElementById('consolidated-results');
-            container.innerHTML = "<p class='animate-pulse'>Calculating totals...</p>";
+            container.innerHTML = "<p class='animate-pulse text-center p-10 font-bold'>Processing Master List...</p>";
             container.classList.remove('hidden');
 
-            const { data, error } = await _supabase.from('orders').select('*').eq('delivery_date', date);
-            
+            const { data } = await _supabase.from('orders').select('*').eq('delivery_date', date);
             if (!data || data.length === 0) {
-                container.innerHTML = "<p class='text-red-500 font-bold'>No orders found for this date.</p>";
+                container.innerHTML = "<p class='text-red-500 font-bold p-10 text-center uppercase'>No orders for this date.</p>";
                 return;
             }
 
-            // 1. Calculate Totals Per Item
+            // 1. Calculate Totals
             const totals = {};
-            data.forEach(o => {
-                o.items.forEach(i => {
-                    const key = `${i.name} (${i.unit})`;
-                    totals[key] = (totals[key] || 0) + i.quantity;
-                });
-            });
+            data.forEach(o => { o.items.forEach(i => {
+                const key = `${i.name} (${i.unit})`;
+                totals[key] = (totals[key] || 0) + i.quantity;
+            });});
 
-            let html = `<h3 class="text-blue-900 font-black text-xs uppercase mb-3 border-b pb-2">1. TOTAL PICK LIST (${date})</h3><ul class="space-y-1 mb-6">`;
+            let html = `<div class="flex justify-between items-center mb-4 border-b pb-2"><h3 class="text-blue-900 font-black text-xs uppercase tracking-widest">1. TOTAL PICK LIST</h3><button onclick="window.print()" class="text-[10px] bg-slate-100 px-2 py-1 rounded font-bold uppercase">Print</button></div><ul class="space-y-1 mb-8">`;
             for (const [name, qty] of Object.entries(totals)) {
-                html += `<li class="flex justify-between border-b border-slate-100 py-1 font-bold text-sm"><span>${name}</span> <span class="text-blue-600">x${qty}</span></li>`;
+                html += `<li class="flex justify-between border-b border-slate-50 py-1 font-bold text-sm"><span>${name}</span> <span class="text-blue-600">x${qty}</span></li>`;
             }
-            html += "</ul>";
-
-            // 2. Organized by Venue
-            html += `<h3 class="text-blue-900 font-black text-xs uppercase mb-3 border-b pb-2">2. ORDERS BY VENUE</h3>`;
+            html += `</ul><h3 class="text-blue-900 font-black text-xs uppercase mb-4 border-b pb-2 tracking-widest">2. ORDERS BY VENUE</h3>`;
+            
+            // 2. Organized by Venue (The Updated Format)
             data.forEach(o => {
                 html += `
-                    <div class="mb-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                        <div class="flex justify-between mb-1"><span class="font-black text-blue-700">${o.venue_id}</span> <span class="text-[10px] text-slate-400 font-bold">${o.delivery_slot}</span></div>
-                        <p class="text-xs text-slate-700 font-medium">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</p>
-                        ${o.comment ? `<p class="mt-2 text-[10px] bg-white p-2 rounded text-red-500 font-bold">NOTE: ${o.comment}</p>` : ''}
+                    <div class="mb-6 bg-white p-4 rounded-xl border-2 border-slate-50 shadow-sm">
+                        <div class="flex justify-between mb-3 font-black text-blue-700 uppercase tracking-tighter italic border-b pb-1">
+                            <span>${o.venue_id}</span> 
+                            <span class="text-[9px] text-slate-400">${o.delivery_slot}</span>
+                        </div>
+                        <ul class="space-y-1">
+                            ${o.items.map(i => `
+                                <li class="flex justify-between text-xs font-semibold text-slate-700 border-b border-slate-50 py-1 last:border-0">
+                                    <span>${i.name}</span>
+                                    <span class="text-blue-500">x${i.quantity} ${i.unit}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                        ${o.comment ? `<div class="mt-3 text-[10px] bg-red-50 p-2 rounded text-red-600 font-bold border border-red-100 italic uppercase">Note: ${o.comment}</div>` : ''}
                     </div>
                 `;
             });
-
             container.innerHTML = html;
         }
 
@@ -279,13 +259,13 @@
             const { data } = await _supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(10);
             if (data) {
                 container.innerHTML = data.map(o => `
-                    <div class="p-3 bg-slate-50 rounded-xl text-[11px] border border-slate-100 text-left">
+                    <div class="p-3 bg-slate-50 rounded-xl text-[11px] border border-slate-100 shadow-sm mb-2">
                         <div class="flex justify-between font-black mb-1 uppercase tracking-tighter text-[10px]">
                             <span class="text-blue-600">${o.venue_id}</span>
                             <span class="text-slate-400">DEL: ${o.delivery_date}</span>
                         </div>
-                        <div class="text-slate-800">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</div>
-                        ${o.comment ? `<div class="mt-1 text-red-500 font-bold border-t pt-1 italic">REQ: ${o.comment}</div>` : ''}
+                        <div class="text-slate-800 italic leading-tight">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</div>
+                        ${o.comment ? `<div class="mt-2 text-red-600 font-bold border-t pt-1 italic text-[10px]">NOTE: ${o.comment}</div>` : ''}
                     </div>
                 `).join('');
             }
