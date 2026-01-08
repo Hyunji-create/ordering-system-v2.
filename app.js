@@ -206,8 +206,11 @@ window.applyStandingToDaily = async function() {
     document.querySelectorAll('#product-list input[type="number"]').forEach(i => { i.value = "0"; i.classList.remove('auto-filled'); });
     document.querySelectorAll('.note-input').forEach(i => { i.value = ""; i.style.display = 'none'; });
     document.getElementById('order-comment').value = "";
+    
+    // VITAL FIX: Use the acting venue for the DB query
     const { data } = await _supabase.from('orders').select('*').eq('venue_id', window.currentUser.venue).eq('delivery_date', dateStr).eq('delivery_slot', slot).maybeSingle();
     currentDBOrder = data;
+    
     if (data) {
         data.items.forEach(item => {
             const inp = document.getElementById(`qty-${item.name}`);
@@ -261,9 +264,23 @@ window.submitOrder = async function() {
         const inp = row.querySelector('input[type="number"]');
         items.push({ name: inp.dataset.name, quantity: parseInt(inp.value) || 0, comment: row.querySelector('.note-input').value });
     });
-    const payload = { venue_id: window.currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items: items, comment: document.getElementById('order-comment').value };
+    
+    // VITAL FIX: Force the payload to use the acting venue
+    const payload = { 
+        venue_id: window.currentUser.venue, 
+        delivery_date: dateStr, 
+        delivery_slot: slot, 
+        items: items, 
+        comment: document.getElementById('order-comment').value 
+    };
+
     let res = currentDBOrder ? await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id) : await _supabase.from('orders').insert([payload]);
-    if (!res.error) { alert("Final Order Saved!"); applyStandingToDaily(); }
+    if (!res.error) { 
+        alert("Success: Quantities updated for " + window.currentUser.venue); 
+        applyStandingToDaily(); 
+    } else {
+        alert("Error saving order: " + res.error.message);
+    }
 };
 
 // --- CONSOLIDATED REPORT ---
@@ -350,12 +367,20 @@ window.generateConsolidatedReport = async function() {
 };
 
 window.editVenueOrder = function(venueId, dateStr, slot) {
+    // 1. Force the current acting user to be the venue we want to adjust
     window.currentUser.venue = venueId;
     updateOverrideIndicator(venueId, true);
+    
+    // 2. Set the form values
     document.getElementById('delivery-date').value = dateStr;
     document.getElementById('delivery-slot').value = slot;
+    
+    // 3. Switch tabs and load the specific data
     window.switchTab('daily');
-    loadProducts();
+    
+    // VITAL FIX: Force a fresh product load and apply standing for the NEW venue
+    loadProducts(); 
+    
     setTimeout(() => {
         document.getElementById('override-status-indicator').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 500);
