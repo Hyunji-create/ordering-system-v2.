@@ -12,7 +12,7 @@
         .day-active { background-color: #fbbf24 !important; color: black !important; border-color: #b45309 !important; transform: scale(0.95); }
     </style>
 </head>
-<body class="bg-slate-200 min-h-screen p-2 font-sans text-slate-900">
+<body class="bg-slate-200 min-h-screen p-2 font-sans text-slate-900 text-center">
 
     <script>
         const PRODUCT_ORDER = [
@@ -58,9 +58,9 @@
         }
     </script>
 
-    <div id="login-card" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-3xl shadow-2xl text-center">
+    <div id="login-card" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-3xl shadow-2xl">
         <h1 class="text-3xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Kitchen Portal</h1>
-        <p class="text-blue-600 font-bold text-[10px] tracking-widest mb-8 uppercase text-center">Internal Operations</p>
+        <p class="text-blue-600 font-bold text-[10px] tracking-widest mb-8 uppercase">Internal Operations</p>
         <div class="space-y-4">
             <input id="username" type="text" placeholder="USER ID" class="w-full p-4 border-2 rounded-2xl uppercase text-center font-bold outline-none">
             <input id="password" type="password" placeholder="PASSWORD" class="w-full p-4 border-2 rounded-2xl text-center font-bold outline-none">
@@ -82,7 +82,7 @@
             <button onclick="switchTab('standing')" id="tab-standing" class="py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400">🔄 Standing Order</button>
         </div>
 
-        <div id="view-daily" class="space-y-4 text-center">
+        <div id="view-daily" class="space-y-4">
             <div id="kitchen-admin-section" class="bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
                 <p class="text-[10px] font-black uppercase mb-4 text-blue-400 tracking-widest">Order Summary</p>
                 <div class="flex gap-2">
@@ -109,14 +109,14 @@
                         <option value="2nd Delivery">2nd Delivery</option>
                     </select>
                 </div>
-                <div id="product-list" class="divide-y border-t border-slate-100"></div>
-                <textarea id="order-comment" placeholder="Initial note for kitchen..." class="w-full p-4 bg-slate-50 border rounded-2xl text-sm" rows="2"></textarea>
+                <div id="product-list" class="divide-y border-t border-slate-100 text-left"></div>
+                <textarea id="order-comment" placeholder="Note for kitchen..." class="w-full p-4 bg-slate-50 border rounded-2xl text-sm" rows="2"></textarea>
                 <button id="submit-btn-text" onclick="submitOrder()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm">Submit Order</button>
             </div>
         </div>
 
         <div id="view-standing" class="hidden space-y-4">
-            <div class="bg-blue-900 text-white p-8 rounded-3xl shadow-xl text-center">
+            <div class="bg-blue-900 text-white p-8 rounded-3xl shadow-xl">
                 <div class="flex flex-wrap gap-2 justify-center mb-6" id="day-selector">
                     <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Mon">MON</button>
                     <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Tue">TUE</button>
@@ -126,25 +126,23 @@
                     <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Sat">SAT</button>
                     <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Sun">SUN</button>
                 </div>
-                <div class="space-y-4">
-                    <select id="standing-item" class="w-full p-4 rounded-2xl text-slate-900 font-bold uppercase text-xs"></select>
+                <div class="space-y-4 text-slate-900">
+                    <select id="standing-item" class="w-full p-4 rounded-2xl font-bold uppercase text-xs"></select>
                     <div class="flex gap-2">
-                        <select id="standing-slot" class="flex-1 p-4 rounded-2xl text-slate-900 font-bold uppercase text-xs">
+                        <select id="standing-slot" class="flex-1 p-4 rounded-2xl font-bold uppercase text-xs">
                             <option value="1st Delivery">1st Delivery</option>
                             <option value="2nd Delivery">2nd Delivery</option>
                         </select>
-                        <input id="standing-qty" type="number" placeholder="QTY" class="w-24 p-4 rounded-2xl text-slate-900 text-center font-black">
+                        <input id="standing-qty" type="number" placeholder="QTY" class="w-24 p-4 rounded-2xl text-center font-black">
                     </div>
                     <button onclick="addStandingOrder()" class="w-full bg-white text-blue-900 font-black py-5 rounded-2xl uppercase shadow-lg">Save to Schedule</button>
                 </div>
             </div>
-            <div class="bg-white p-6 rounded-3xl shadow-md border border-slate-100 text-left">
-                <div id="standing-items-container" class="space-y-6"></div>
-            </div>
+            <div id="standing-items-container" class="bg-white p-6 rounded-3xl shadow-md border border-slate-100 space-y-6"></div>
         </div>
 
         <div class="bg-white p-6 rounded-3xl shadow-md border border-slate-100">
-            <p class="text-[10px] font-black text-slate-300 uppercase tracking-widest text-center border-b pb-2 mb-4">Activity Log</p>
+            <p class="text-[10px] font-black text-slate-300 uppercase tracking-widest border-b pb-2 mb-4">Activity Log</p>
             <div id="history-container" class="space-y-2 text-left"></div>
         </div>
     </div>
@@ -159,7 +157,7 @@
         }
 
         async function updateComment(orderId) {
-            const newComment = prompt("Add a note for the kitchen (e.g. 'Add 2x Ice'):");
+            const newComment = prompt("Add a note for the kitchen (e.g. 'Need extra ice'):");
             if (newComment !== null) {
                 const { error } = await _supabase.from('orders').update({ comment: newComment }).eq('id', orderId);
                 if (!error) { alert("Note Attached!"); loadHistory(); }
@@ -209,33 +207,30 @@
 
         async function generateConsolidatedReport() {
             const dateStr = document.getElementById('admin-view-date').value;
-            const targetDate = new Date(dateStr + "T00:00:00");
-            const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDate.getDay()];
+            const d = new Date(dateStr + "T00:00:00");
+            const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
             const res = document.getElementById('consolidated-results');
-            res.innerHTML = "LOADING..."; res.classList.remove('hidden');
+            res.innerHTML = "CALCULATING..."; res.classList.remove('hidden');
 
             const { data: oneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', dateStr);
             const { data: standings } = await _supabase.from('standing_orders').select('*');
-            const relevantStandings = (standings || []).filter(s => s.days_of_week.includes(targetDay));
+            const relevant = (standings || []).filter(s => s.days_of_week.includes(targetDay));
 
             const finalData = { "1st Delivery": {}, "2nd Delivery": {} };
             const venueNotes = [];
 
-            // Group by slot and sum
-            relevantStandings.forEach(s => {
-                const slot = s.delivery_slot;
-                finalData[slot][s.item_name] = (finalData[slot][s.item_name] || 0) + s.quantity;
+            relevant.forEach(s => {
+                finalData[s.delivery_slot][s.item_name] = (finalData[s.delivery_slot][s.item_name] || 0) + s.quantity;
             });
             (oneOffs || []).forEach(o => {
-                const slot = o.delivery_slot;
-                o.items.forEach(i => finalData[slot][i.name] = (finalData[slot][i.name] || 0) + i.quantity);
-                if(o.comment) venueNotes.push({ venue: o.venue_id, slot: slot, note: o.comment });
+                o.items.forEach(i => finalData[o.delivery_slot][i.name] = (finalData[o.delivery_slot][i.name] || 0) + i.quantity);
+                if(o.comment) venueNotes.push({ venue: o.venue_id, slot: o.delivery_slot, note: o.comment });
             });
 
             let html = `<div class="flex justify-between border-b pb-2 mb-4 uppercase text-[10px] font-black text-blue-900"><span>Summary (${dateStr})</span><button onclick="window.print()" class="underline">Print</button></div>`;
             
             ["1st Delivery", "2nd Delivery"].forEach(slot => {
-                html += `<div class="mb-6"><h4 class="text-xs font-black text-slate-800 uppercase bg-slate-100 p-2 rounded mb-2">${slot}</h4>`;
+                html += `<div class="mb-6"><h4 class="text-xs font-black text-slate-800 uppercase bg-slate-100 p-2 rounded mb-2">${slot} Totals</h4>`;
                 const sorted = Object.entries(finalData[slot]).map(([name, qty]) => ({name, qty})).sort(sortItemsByCustomOrder);
                 if (sorted.length > 0) {
                     sorted.forEach(item => html += `<div class="flex justify-between py-1.5 border-b text-sm font-bold"><span>${item.name}</span><span class="text-blue-600">x${item.qty}</span></div>`);
@@ -244,7 +239,7 @@
             });
 
             if(venueNotes.length > 0) {
-                html += `<div class="mt-4 p-4 bg-red-50 rounded-2xl border-2 border-red-100"><h4 class="text-[10px] font-black uppercase text-red-600 mb-2">Urgent Venue Notes</h4>`;
+                html += `<div class="mt-4 p-4 bg-red-50 rounded-2xl border-2 border-red-100"><h4 class="text-[10px] font-black uppercase text-red-600 mb-2">Venue Notes</h4>`;
                 venueNotes.forEach(n => html += `<p class="text-xs font-bold mb-1"><span class="text-red-800">${n.venue} (${n.slot}):</span> ${n.note}</p>`);
                 html += `</div>`;
             }
@@ -259,9 +254,10 @@
                 const orderDate = new Date(o.delivery_date + "T00:00:00");
                 const today = new Date(); today.setHours(0,0,0,0);
                 
-                // LOGIC: Edit allowed if it's for Tomorrow+ OR if it's for today and before 1pm.
-                let canEdit = isMine;
-                if (orderDate.getTime() === today.getTime() && now.getHours() >= 13) canEdit = false;
+                // FIXED EDIT LOGIC:
+                // 1. If order is for Tomorrow or later: Show Edit.
+                // 2. If order is for Today AND it is before 1pm: Show Edit.
+                let canEdit = isMine && (orderDate > today || (orderDate.getTime() === today.getTime() && now.getHours() < 13));
 
                 return `
                 <div class="p-4 bg-slate-50 rounded-2xl border mb-2 shadow-sm">
@@ -276,7 +272,6 @@
             }).join('');
         }
 
-        // Supporting functions
         function setTomorrowDate() {
             const tom = new Date(); tom.setDate(tom.getDate() + 1);
             const iso = tom.toISOString().split('T')[0];
@@ -360,7 +355,7 @@
             const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
             const targetDay = dayNames[d.getDay()];
             const matches = allStandingOrders.filter(s => s.days_of_week.includes(targetDay) && s.delivery_slot === selectedSlot);
-            if (matches.length === 0) return alert("No standing orders for this day/slot.");
+            if (matches.length === 0) return alert("No standing orders found.");
             document.querySelectorAll('#product-list input').forEach(inp => inp.value = "");
             matches.forEach(s => {
                 const input = Array.from(document.querySelectorAll('#product-list input')).find(i => i.dataset.name === s.item_name);
