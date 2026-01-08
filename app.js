@@ -119,7 +119,6 @@ window.adjustQty = function(itemName, change) {
     }
 };
 
-// --- IMPROVED LOCK LOGIC FOR 2-DAY ITEMS ---
 function isItemLocked(itemName) {
     const dateStr = document.getElementById('delivery-date').value;
     const now = new Date();
@@ -129,21 +128,12 @@ function isItemLocked(itemName) {
     const dayAfter = new Date(today); dayAfter.setDate(today.getDate() + 2);
 
     const isTwoDayItem = LEAD_2_DAY_ITEMS.includes(itemName);
-
-    // Standard Lock: If order is for today or before
     if (orderDate <= today) return true;
-
-    // 2-Day Item Logic
     if (isTwoDayItem) {
-        // Lock 2-day items for Tomorrow completely
         if (orderDate.getTime() === tomorrow.getTime()) return true;
-        // Lock 2-day items for Day After Tomorrow if past 1pm today
         if (orderDate.getTime() === dayAfter.getTime() && now.getHours() >= 13) return true;
     }
-
-    // Normal Item Logic
     if (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13) return true;
-
     return false;
 }
 
@@ -151,69 +141,46 @@ function checkFormLock() {
     const dateStr = document.getElementById('delivery-date').value;
     const orderDate = new Date(dateStr + "T00:00:00");
     const today = new Date(); today.setHours(0,0,0,0);
-    
     const btn = document.getElementById('save-btn');
     const msg = document.getElementById('lock-msg');
-    
-    // Total form lock only if past 1pm for tomorrow
     const now = new Date();
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
     let totalLocked = (orderDate <= today) || (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
+    if (totalLocked) { btn.classList.add('btn-disabled'); msg.classList.remove('hidden'); } 
+    else { msg.classList.add('hidden'); }
 
-    if (totalLocked) {
-        btn.classList.add('btn-disabled'); msg.classList.remove('hidden');
-    } else {
-        msg.classList.add('hidden');
-    }
-
-    // Individual Item Locking
     activeProducts.forEach(p => {
         const locked = isItemLocked(p.name);
         const input = document.getElementById(`qty-${p.name}`);
         const btns = document.querySelectorAll(`button[data-item="${p.name}"]`);
         if (input) {
-            if (locked) {
-                input.classList.add('locked-qty');
-                btns.forEach(b => b.classList.add('opacity-30', 'pointer-events-none'));
-            } else {
-                input.classList.remove('locked-qty');
-                btns.forEach(b => b.classList.remove('opacity-30', 'pointer-events-none'));
-            }
+            if (locked) { input.classList.add('locked-qty'); btns.forEach(b => b.classList.add('opacity-30', 'pointer-events-none')); } 
+            else { input.classList.remove('locked-qty'); btns.forEach(b => b.classList.remove('opacity-30', 'pointer-events-none')); }
         }
     });
 }
 
-// --- DAILY ORDER CORE ---
 window.applyStandingToDaily = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr + "T00:00:00").getDay()];
-
     document.querySelectorAll('#product-list input[type="number"]').forEach(i => { i.value = "0"; i.classList.remove('auto-filled'); });
     document.querySelectorAll('.note-input').forEach(i => { i.value = ""; i.style.display = 'none'; });
     document.getElementById('order-comment').value = "";
-
     const { data } = await _supabase.from('orders').select('*').eq('venue_id', currentUser.venue).eq('delivery_date', dateStr).eq('delivery_slot', slot).maybeSingle();
     currentDBOrder = data;
-
     if (data) {
         data.items.forEach(item => {
             const inp = document.getElementById(`qty-${item.name}`);
             if (inp) {
                 inp.value = item.quantity;
-                if (item.comment) {
-                    const note = document.getElementById(`note-${item.name}`);
-                    note.value = item.comment; note.style.display = 'block';
-                }
+                if (item.comment) { const note = document.getElementById(`note-${item.name}`); note.value = item.comment; note.style.display = 'block'; }
             }
         });
         document.getElementById('order-comment').value = data.comment || "";
     } else {
         const matches = allStandingOrders.filter(s => s.days_of_week.includes(targetDay) && s.delivery_slot === slot);
-        matches.forEach(s => {
-            const inp = document.getElementById(`qty-${s.item_name}`);
-            if (inp) { inp.value = s.quantity; inp.classList.add('auto-filled'); }
-        });
+        matches.forEach(s => { const inp = document.getElementById(`qty-${s.item_name}`); if (inp) { inp.value = s.quantity; inp.classList.add('auto-filled'); } });
     }
     captureState();
     checkFormLock();
@@ -235,13 +202,8 @@ window.validateChanges = function() {
     state.push(document.getElementById('order-comment').value);
     const currentFormState = JSON.stringify(state);
     const btn = document.getElementById('save-btn');
-    
-    if (currentFormState !== initialFormState) {
-        btn.classList.remove('btn-disabled');
-        btn.innerText = "Save Changes";
-    } else {
-        btn.classList.add('btn-disabled'); btn.innerText = "No Changes";
-    }
+    if (currentFormState !== initialFormState) { btn.classList.remove('btn-disabled'); btn.innerText = "Save Changes"; } 
+    else { btn.classList.add('btn-disabled'); btn.innerText = "No Changes"; }
 };
 
 window.submitOrder = async function() {
@@ -257,22 +219,37 @@ window.submitOrder = async function() {
     if (!res.error) { alert("Sent to Kitchen!"); applyStandingToDaily(); }
 };
 
-// --- CONSOLIDATED REPORT ---
+// --- CONSOLIDATED REPORT (WITH CK PREP LIST & UPCOMING 2-DAY LIST) ---
 window.generateConsolidatedReport = async function() {
     const dateStr = document.getElementById('admin-view-date').value;
-    const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr + "T00:00:00").getDay()];
+    const targetDateObj = new Date(dateStr + "T00:00:00");
+    const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDateObj.getDay()];
+    
+    // Calculate "Day After" for 2-day lead items
+    const nextDateObj = new Date(targetDateObj);
+    nextDateObj.setDate(targetDateObj.getDate() + 1);
+    const nextDateStr = nextDateObj.toISOString().split('T')[0];
+    const nextDayName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][nextDateObj.getDay()];
+
     const res = document.getElementById('consolidated-results');
     res.innerHTML = "LOADING..."; res.classList.remove('hidden');
 
     try {
+        // Fetch Today's Orders & Next Day's Orders (for 2-day lead prep)
         const { data: oneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', dateStr);
+        const { data: upcomingOneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', nextDateStr);
         const { data: standings } = await _supabase.from('standing_orders').select('*');
+        
         const venueReport = {};
         const totalCounts = {};
+        const upcomingLeadTotals = {};
+        
         PRODUCT_ORDER.forEach(p => totalCounts[p] = 0);
+        LEAD_2_DAY_ITEMS.forEach(p => upcomingLeadTotals[p] = 0);
 
         ["WYN", "MCC", "WSQ", "DSQ", "GJ"].forEach(v => { venueReport[v] = { "1st Delivery": {items:[], note:""}, "2nd Delivery": {items:[], note:""} }; });
 
+        // 1. Process CURRENT Day
         (standings || []).forEach(s => {
             if(s.days_of_week && s.days_of_week.includes(targetDay)) {
                 if(venueReport[s.venue_id]) {
@@ -281,28 +258,50 @@ window.generateConsolidatedReport = async function() {
                 }
             }
         });
-
         (oneOffs || []).forEach(o => {
             if(venueReport[o.venue_id]) {
-                venueReport[o.venue_id][o.delivery_slot].items.forEach(oldItem => {
-                    if(totalCounts.hasOwnProperty(oldItem.name)) totalCounts[oldItem.name] -= oldItem.qty;
-                });
+                venueReport[o.venue_id][o.delivery_slot].items.forEach(oldItem => { if(totalCounts.hasOwnProperty(oldItem.name)) totalCounts[oldItem.name] -= oldItem.qty; });
                 venueReport[o.venue_id][o.delivery_slot].items = o.items.map(i => ({ name: i.name, qty: i.quantity, note: i.comment || "" }));
                 if (o.comment) venueReport[o.venue_id][o.delivery_slot].note = o.comment;
-                o.items.forEach(i => {
-                    if(totalCounts.hasOwnProperty(i.name)) totalCounts[i.name] += i.quantity;
-                });
+                o.items.forEach(i => { if(totalCounts.hasOwnProperty(i.name)) totalCounts[i.name] += i.quantity; });
             }
         });
+
+        // 2. Process UPCOMING (Next Day) 2-Day Lead Items ONLY
+        if (window.currentUser.venue === 'CK') {
+            (standings || []).forEach(s => {
+                if(s.days_of_week && s.days_of_week.includes(nextDayName) && LEAD_2_DAY_ITEMS.includes(s.item_name)) {
+                    upcomingLeadTotals[s.item_name] += s.quantity;
+                }
+            });
+            (upcomingOneOffs || []).forEach(o => {
+                // If a manual order exists for next day, replace the standing count for lead items
+                o.items.forEach(i => {
+                    if (LEAD_2_DAY_ITEMS.includes(i.name)) {
+                        // Find if there was a standing order for this item/venue/slot to subtract first
+                        const matchStanding = (standings || []).find(s => s.venue_id === o.venue_id && s.delivery_slot === o.delivery_slot && s.item_name === i.name && s.days_of_week.includes(nextDayName));
+                        if (matchStanding) upcomingLeadTotals[i.name] -= matchStanding.quantity;
+                        upcomingLeadTotals[i.name] += i.quantity;
+                    }
+                });
+            });
+        }
 
         let html = `<div class="flex justify-between border-b pb-2 mb-4 uppercase text-[10px] font-black text-blue-900"><span>Loading Plan (${dateStr})</span><button onclick="window.print()" class="underline">Print</button></div>`;
 
         if (window.currentUser.venue === 'CK') {
             html += `<div class="mb-6 p-4 border-2 border-blue-600 bg-blue-50 rounded-2xl text-left shadow-md">
-                        <h3 class="font-black text-blue-900 text-lg border-b border-blue-200 pb-1 mb-3 uppercase italic">Total Prep List</h3>
-                        <div class="grid grid-cols-1 gap-1">`;
+                        <h3 class="font-black text-blue-900 text-lg border-b border-blue-200 pb-1 mb-3 uppercase italic">Total Prep (For ${dateStr})</h3>
+                        <div class="grid grid-cols-1 gap-1 mb-6">`;
             PRODUCT_ORDER.forEach(p => {
                 html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-blue-100"><span class="text-slate-700">${p}</span><span class="text-blue-700 bg-white px-3 rounded-lg border">x ${totalCounts[p]}</span></div>`;
+            });
+            html += `</div>
+                     <h3 class="font-black text-orange-600 text-lg border-b border-orange-200 pb-1 mb-3 uppercase italic">Upcoming Production (For ${nextDateStr})</h3>
+                     <p class="text-[9px] font-bold text-orange-400 mb-3 uppercase italic">Start preparing these today for delivery on ${nextDateStr}</p>
+                     <div class="grid grid-cols-1 gap-1">`;
+            LEAD_2_DAY_ITEMS.forEach(p => {
+                html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-orange-100"><span class="text-slate-700">${p}</span><span class="text-orange-600 bg-white px-3 rounded-lg border">x ${upcomingLeadTotals[p]}</span></div>`;
             });
             html += `</div></div>`;
         }
