@@ -64,10 +64,10 @@
 
             <div id="product-list" class="space-y-1 border-t pt-4 min-h-[100px]"></div>
 
-            <div class="space-y-4">
+            <div class="space-y-4 text-center">
                 <textarea id="order-comment" placeholder="Special requests or edit requests..." class="w-full p-4 bg-slate-50 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-600" rows="2"></textarea>
                 
-                <div class="flex items-center space-x-2 bg-yellow-50 p-3 rounded-xl border border-yellow-100">
+                <div class="flex items-center space-x-2 bg-yellow-50 p-3 rounded-xl border border-yellow-100 justify-center">
                     <input type="checkbox" id="save-standing-order" class="w-4 h-4">
                     <label for="save-standing-order" class="text-[10px] font-bold uppercase text-yellow-700">Save as Standing Order</label>
                 </div>
@@ -102,6 +102,28 @@
 
         let currentUser = null;
         let activeProducts = [];
+
+        // --- NEW AUTO-DATE LOGIC ---
+        function setTomorrowDate() {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            // Format to YYYY-MM-DD for the input fields
+            const year = tomorrow.getFullYear();
+            const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+            const day = String(tomorrow.getDate()).padStart(2, '0');
+            const formattedDate = `${year}-${month}-${day}`;
+
+            document.getElementById('delivery-date').value = formattedDate;
+            document.getElementById('admin-view-date').value = formattedDate;
+        }
+
+        window.onload = function() {
+            setTomorrowDate();
+            document.getElementById('login-btn').onclick = handleLogin;
+            document.getElementById('submit-btn').onclick = submitOrder;
+            document.getElementById('supplier-select').onchange = loadProducts;
+        };
 
         function handleLogin() {
             const u = document.getElementById('username').value.toLowerCase().trim();
@@ -185,6 +207,7 @@
 
             if (document.getElementById('save-standing-order').checked) {
                 localStorage.setItem(`standing_${currentUser.venue}`, JSON.stringify(orderItems));
+                alert("Standing Order Saved!");
             }
 
             if (!error) { 
@@ -218,7 +241,6 @@
                 return;
             }
 
-            // 1. Calculate Totals
             const totals = {};
             data.forEach(o => { o.items.forEach(i => {
                 const key = `${i.name} (${i.unit})`;
@@ -231,7 +253,6 @@
             }
             html += `</ul><h3 class="text-blue-900 font-black text-xs uppercase mb-4 border-b pb-2 tracking-widest">2. ORDERS BY VENUE</h3>`;
             
-            // 2. Organized by Venue (The Updated Format)
             data.forEach(o => {
                 html += `
                     <div class="mb-6 bg-white p-4 rounded-xl border-2 border-slate-50 shadow-sm">
@@ -264,7 +285,7 @@
                             <span class="text-blue-600">${o.venue_id}</span>
                             <span class="text-slate-400">DEL: ${o.delivery_date}</span>
                         </div>
-                        <div class="text-slate-800 italic leading-tight">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</div>
+                        <div class="text-slate-800 italic leading-tight text-left">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</div>
                         ${o.comment ? `<div class="mt-2 text-red-600 font-bold border-t pt-1 italic text-[10px]">NOTE: ${o.comment}</div>` : ''}
                     </div>
                 `).join('');
