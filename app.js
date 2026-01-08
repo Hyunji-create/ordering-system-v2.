@@ -15,7 +15,7 @@ const USERS = [
 let _supabase, initialFormState = "", currentDBOrder = null;
 let allStandingOrders = [];
 let activeProducts = [];
-let originalKitchenVenue = ""; // To help managers reset after overriding
+let originalKitchenVenue = ""; 
 
 // --- LOGIN & STARTUP ---
 window.handleLogin = function() {
@@ -23,14 +23,28 @@ window.handleLogin = function() {
     const p = document.getElementById('password').value.trim();
     const found = USERS.find(x => x.id === u && x.pw === p);
     if (found) {
-        window.currentUser = JSON.parse(JSON.stringify(found)); // Deep copy
+        window.currentUser = JSON.parse(JSON.stringify(found)); 
         if (found.role === 'kitchen') originalKitchenVenue = found.venue;
         document.getElementById('login-card').classList.add('hidden');
         document.getElementById('dashboard').classList.remove('hidden');
-        document.getElementById('welcome-msg').innerText = found.venue;
+        updateHeader(found.venue);
         startApp();
     } else { alert("Login failed."); }
 };
+
+function updateHeader(venueName, isOverride = false) {
+    const msg = document.getElementById('welcome-msg');
+    if (isOverride) {
+        // High visibility Red Header for Override Mode
+        msg.innerHTML = `<div class="flex items-center gap-2 text-red-600 font-black">
+                            <span class="animate-ping h-2 w-2 rounded-full bg-red-500"></span>
+                            MANAGING: ${venueName}
+                            <button onclick="resetToKitchen()" class="ml-2 bg-red-600 text-white px-3 py-1 rounded-lg text-[10px] uppercase shadow-lg">Exit</button>
+                         </div>`;
+    } else {
+        msg.innerHTML = `<span class="text-blue-600">●</span> ${venueName}`;
+    }
+}
 
 function startApp() {
     _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -186,7 +200,11 @@ window.applyStandingToDaily = async function() {
             const inp = document.getElementById(`qty-${item.name}`);
             if (inp) {
                 inp.value = item.quantity;
-                if (item.comment) { const note = document.getElementById(`note-${item.name}`); note.value = item.comment; note.style.display = 'block'; }
+                if (item.comment) { 
+                    const note = document.getElementById(`note-${item.name}`); 
+                    note.value = item.comment; 
+                    note.style.display = 'block'; 
+                }
             }
         });
         document.getElementById('order-comment').value = data.comment || "";
@@ -215,11 +233,16 @@ window.validateChanges = function() {
     const currentFormState = JSON.stringify(state);
     const btn = document.getElementById('save-btn');
     
+    // REQUESTED CHANGE: Button now always says "Save Changes" instead of "No Changes"
+    btn.innerText = "Save Changes";
+
     if (currentFormState !== initialFormState) { 
         btn.classList.remove('btn-disabled'); 
-        btn.innerText = window.currentUser.role === 'kitchen' ? "Override & Save" : (isOrderLocked() ? "Send Note Only" : "Save Changes");
+        if (window.currentUser.role === 'kitchen') {
+            btn.innerText = "Confirm & Save Final Order";
+        }
     } else { 
-        btn.classList.add('btn-disabled'); btn.innerText = "No Changes"; 
+        btn.classList.add('btn-disabled'); 
     }
 };
 
@@ -229,14 +252,31 @@ window.submitOrder = async function() {
     const items = [];
     document.querySelectorAll('#product-list .item-row').forEach(row => {
         const inp = row.querySelector('input[type="number"]');
-        items.push({ name: inp.dataset.name, quantity: parseInt(inp.value) || 0, comment: row.querySelector('.note-input').value });
+        items.push({ 
+            name: inp.dataset.name, 
+            quantity: parseInt(inp.value) || 0, 
+            comment: row.querySelector('.note-input').value 
+        });
     });
-    const payload = { venue_id: window.currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items: items, comment: document.getElementById('order-comment').value };
+    
+    const generalNote = document.getElementById('order-comment').value;
+
+    const payload = { 
+        venue_id: window.currentUser.venue, 
+        delivery_date: dateStr, 
+        delivery_slot: slot, 
+        items: items, 
+        comment: generalNote 
+    };
+
     let res = currentDBOrder ? await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id) : await _supabase.from('orders').insert([payload]);
-    if (!res.error) { alert("Success!"); applyStandingToDaily(); }
+    if (!res.error) { 
+        alert("Final Order Saved!"); 
+        applyStandingToDaily(); 
+    }
 };
 
-// --- CONSOLIDATED REPORT (WITH EDIT & PREP LISTS) ---
+// --- CONSOLIDATED REPORT ---
 window.generateConsolidatedReport = async function() {
     const dateStr = document.getElementById('admin-view-date').value;
     const targetDateObj = new Date(dateStr + "T00:00:00");
@@ -285,11 +325,11 @@ window.generateConsolidatedReport = async function() {
 
         let html = `<div class="flex justify-between border-b pb-2 mb-4 uppercase text-[10px] font-black text-blue-900"><span>Loading Plan (${dateStr})</span><button onclick="window.print()" class="underline">Print</button></div>`;
         if (window.currentUser.role === 'kitchen') {
-            html += `<div class="mb-6 p-4 border-2 border-blue-600 bg-blue-50 rounded-2xl text-left">
+            html += `<div class="mb-6 p-4 border-2 border-blue-600 bg-blue-50 rounded-2xl text-left shadow-md">
                         <h3 class="font-black text-blue-900 text-lg border-b border-blue-200 pb-1 mb-3 italic">TOTAL PREP (${dateStr})</h3>
                         <div class="grid grid-cols-1 gap-1 mb-4">`;
             PRODUCT_ORDER.forEach(p => { html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-blue-100"><span>${p}</span><span>x ${totalCounts[p]}</span></div>`; });
-            html += `</div><h3 class="font-black text-orange-600 text-lg border-b border-orange-200 pb-1 mb-3 italic">UPCOMING (${nextDateStr})</h3>
+            html += `</div><h3 class="font-black text-orange-600 text-lg border-b border-orange-200 pb-1 mb-3 italic">UPCOMING LEAD (${nextDateStr})</h3>
                      <div class="grid grid-cols-1 gap-1">`;
             LEAD_2_DAY_ITEMS.forEach(p => { html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-orange-100"><span>${p}</span><span>x ${upcomingLeadTotals[p]}</span></div>`; });
             html += `</div></div>`;
@@ -298,7 +338,7 @@ window.generateConsolidatedReport = async function() {
         Object.keys(venueReport).sort().forEach(v => {
             const vData = venueReport[v];
             if(vData["1st Delivery"].items.length > 0 || vData["2nd Delivery"].items.length > 0 || vData["1st Delivery"].note || vData["2nd Delivery"].note) {
-                html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-white text-left border-slate-200"><h3 class="font-black text-blue-800 text-lg border-b pb-1 mb-3 uppercase italic">${v}</h3>`;
+                html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-white text-left border-slate-200 shadow-sm"><h3 class="font-black text-blue-800 text-lg border-b pb-1 mb-3 uppercase italic">${v}</h3>`;
                 ["1st Delivery", "2nd Delivery"].forEach(slot => {
                     const activeItems = vData[slot].items.filter(i => i.qty > 0).sort(sortItemsByCustomOrder);
                     if(activeItems.length > 0 || vData[slot].note) {
@@ -320,18 +360,21 @@ window.generateConsolidatedReport = async function() {
 };
 
 window.editVenueOrder = function(venueId, dateStr, slot) {
+    // FORCE Update user and UI
     window.currentUser.venue = venueId;
+    updateHeader(venueId, true);
+    
     document.getElementById('delivery-date').value = dateStr;
     document.getElementById('delivery-slot').value = slot;
-    document.getElementById('welcome-msg').innerHTML = `${venueId} <button onclick="resetToKitchen()" class="ml-2 bg-red-600 text-white px-2 py-1 rounded text-[8px]">Exit Override</button>`;
+    
     window.switchTab('daily');
-    loadProducts();
+    loadProducts(); // This triggers the full reload for the specific venue
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 window.resetToKitchen = function() {
     window.currentUser.venue = originalKitchenVenue;
-    document.getElementById('welcome-msg').innerText = originalKitchenVenue;
+    updateHeader(originalKitchenVenue, false);
     setTomorrowDate();
     loadProducts();
 };
