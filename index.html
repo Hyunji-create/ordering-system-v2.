@@ -6,6 +6,9 @@
     <title>Kitchen Order Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        .tab-active { border-bottom: 3px solid #2563eb; color: #2563eb; }
+    </style>
 </head>
 <body class="bg-slate-100 min-h-screen p-4 pb-20 font-sans text-slate-900">
 
@@ -13,75 +16,90 @@
         <h1 class="text-2xl font-bold text-slate-800 mb-2 font-serif tracking-tight uppercase">Kitchen Order Portal</h1>
         <p class="text-slate-500 mb-8 text-[10px] tracking-widest uppercase font-bold text-blue-600">Internal Operations</p>
         <div class="space-y-4">
-            <input id="username" type="text" placeholder="User ID" class="w-full p-4 border rounded-xl uppercase outline-none focus:ring-2 focus:ring-blue-600 shadow-sm text-center">
-            <input id="password" type="password" placeholder="Password" class="w-full p-4 border rounded-xl outline-none focus:ring-2 focus:ring-blue-600 shadow-sm text-center">
-            <button id="login-btn-main" onclick="handleLogin()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl hover:bg-black transition-all shadow-lg active:scale-95 uppercase tracking-widest">Sign In</button>
+            <input id="username" type="text" placeholder="User ID" class="w-full p-4 border rounded-xl uppercase outline-none focus:ring-2 focus:ring-blue-600 text-center">
+            <input id="password" type="password" placeholder="Password" class="w-full p-4 border rounded-xl outline-none focus:ring-2 focus:ring-blue-600 text-center">
+            <button onclick="handleLogin()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl hover:bg-black transition-all shadow-lg uppercase tracking-widest">Sign In</button>
         </div>
     </div>
 
     <div id="dashboard" class="hidden max-w-2xl mx-auto space-y-6">
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center sticky top-0 z-10">
             <div class="text-left">
-                <h1 id="welcome-msg" class="text-xl font-bold text-slate-800 uppercase italic leading-none text-blue-900">Venue</h1>
-                <p id="user-role-display" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1"></p>
+                <h1 id="welcome-msg" class="text-xl font-bold text-blue-900 uppercase italic leading-none">Venue</h1>
+                <p id="user-role-display" class="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-widest"></p>
             </div>
-            <button onclick="location.reload()" class="bg-slate-50 px-4 py-2 rounded-lg text-red-500 text-[10px] font-black border border-slate-100 uppercase hover:bg-red-50">Logout</button>
+            <button onclick="location.reload()" class="text-red-500 text-[10px] font-black uppercase">Logout</button>
         </div>
 
-        <div id="kitchen-admin-section" class="hidden space-y-4">
-            <div class="bg-slate-800 text-white p-6 rounded-2xl shadow-lg text-left border-b-4 border-blue-500">
-                <h2 class="text-sm font-black uppercase tracking-widest mb-4">Kitchen Command Center</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input id="admin-view-date" type="date" class="p-3 rounded-lg text-slate-900 text-sm font-bold w-full">
-                    <button onclick="generateConsolidatedReport()" class="bg-blue-600 text-white font-bold p-3 rounded-lg text-xs uppercase hover:bg-blue-700 transition-colors">Generate Master List</button>
-                </div>
-            </div>
-            <div id="consolidated-results" class="hidden bg-white p-6 rounded-2xl border-2 border-slate-800 shadow-sm text-left"></div>
+        <div class="flex border-b border-slate-200 bg-white rounded-t-2xl overflow-hidden">
+            <button onclick="switchTab('daily')" id="tab-daily" class="flex-1 py-4 font-bold text-xs uppercase tracking-widest tab-active">Daily Order</button>
+            <button onclick="switchTab('standing')" id="tab-standing" class="flex-1 py-4 font-bold text-xs uppercase tracking-widest">Standing Orders</button>
         </div>
 
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Supplier</label>
-                    <select id="supplier-select" onchange="loadProducts()" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold">
-                        <option value="CK">Central Kitchen (CK)</option>
-                        <option value="DSQ">DSQ Kitchen (DSQ)</option>
-                        <option value="GJ">Gojima Supplier (GJ)</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Delivery Date</label>
-                    <input id="delivery-date" type="date" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold text-center shadow-sm">
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Slot</label>
-                    <select id="delivery-slot" class="w-full p-3 border rounded-xl bg-slate-50 text-sm font-semibold">
-                        <option value="1st Delivery">1st Delivery</option>
-                        <option value="2nd Delivery">2nd Delivery</option>
-                    </select>
-                </div>
-            </div>
-
-            <div id="product-list" class="space-y-1 border-t pt-4 min-h-[100px]"></div>
-
-            <div class="space-y-4 text-center border-t pt-6">
-                <textarea id="order-comment" placeholder="Special requests or edit requests..." class="w-full p-4 bg-slate-50 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-600" rows="2"></textarea>
-                
-                <div class="flex items-center space-x-2 bg-yellow-50 p-3 rounded-xl border border-yellow-100 justify-center">
-                    <input type="checkbox" id="save-standing-order" class="w-4 h-4 cursor-pointer">
-                    <label for="save-standing-order" class="text-[10px] font-bold uppercase text-yellow-700 cursor-pointer">Save as Standing Order</label>
-                </div>
-
+        <div id="view-daily" class="bg-white p-6 rounded-b-2xl shadow-sm border border-slate-200 space-y-6">
+            <div id="kitchen-admin-section" class="hidden bg-slate-800 text-white p-4 rounded-xl mb-4">
+                <h2 class="text-[10px] font-black uppercase mb-3">Kitchen Command Center</h2>
                 <div class="flex space-x-2">
-                    <button onclick="loadStandingOrder()" class="flex-1 bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-[10px] uppercase tracking-widest hover:bg-slate-300">Load Standing</button>
-                    <button id="submit-btn-main" onclick="submitOrder()" class="flex-[2] bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition-all uppercase tracking-widest text-xs">Submit Order</button>
+                    <input id="admin-view-date" type="date" class="flex-1 p-2 rounded text-slate-900 text-sm">
+                    <button onclick="generateConsolidatedReport()" class="bg-blue-600 px-4 py-2 rounded text-[10px] uppercase font-bold">Consolidate</button>
+                </div>
+                <div id="consolidated-results" class="hidden mt-4 bg-white text-slate-900 p-4 rounded-lg overflow-auto max-h-96"></div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <select id="supplier-select" onchange="loadProducts()" class="p-3 border rounded-xl bg-slate-50 text-sm font-semibold">
+                    <option value="CK">Central Kitchen (CK)</option>
+                    <option value="DSQ">DSQ Kitchen (DSQ)</option>
+                    <option value="GJ">Gojima Supplier (GJ)</option>
+                </select>
+                <input id="delivery-date" type="date" class="p-3 border rounded-xl bg-slate-50 text-sm font-semibold text-center">
+                <select id="delivery-slot" class="p-3 border rounded-xl bg-slate-50 text-sm font-semibold">
+                    <option value="1st Delivery">1st Delivery</option>
+                    <option value="2nd Delivery">2nd Delivery</option>
+                </select>
+            </div>
+
+            <div id="product-list" class="space-y-1 border-t pt-4"></div>
+            
+            <textarea id="order-comment" placeholder="Special requests..." class="w-full p-4 bg-slate-50 border rounded-xl text-xs" rows="2"></textarea>
+            <button onclick="submitOrder()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg uppercase tracking-widest text-xs">Submit One-Off Order</button>
+        </div>
+
+        <div id="view-standing" class="hidden bg-white p-6 rounded-b-2xl shadow-sm border border-slate-200 space-y-6">
+            <div class="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                <h3 class="text-blue-800 font-bold text-xs uppercase mb-4 tracking-widest text-center">Add New Standing Schedule</h3>
+                <div class="space-y-4">
+                    <div class="flex flex-wrap gap-2 justify-center" id="day-selector">
+                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-white border rounded-lg text-[10px] font-bold uppercase hover:bg-slate-50" data-day="Mon">Mon</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-white border rounded-lg text-[10px] font-bold uppercase hover:bg-slate-50" data-day="Tue">Tue</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-white border rounded-lg text-[10px] font-bold uppercase hover:bg-slate-50" data-day="Wed">Wed</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-white border rounded-lg text-[10px] font-bold uppercase hover:bg-slate-50" data-day="Thu">Thu</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-white border rounded-lg text-[10px] font-bold uppercase hover:bg-slate-50" data-day="Fri">Fri</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-white border rounded-lg text-[10px] font-bold uppercase hover:bg-slate-50" data-day="Sat">Sat</button>
+                        <button onclick="toggleDay(this)" class="day-btn px-3 py-2 bg-white border rounded-lg text-[10px] font-bold uppercase hover:bg-slate-50" data-day="Sun">Sun</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <select id="standing-item" class="p-3 border rounded-xl text-xs font-bold uppercase bg-white"></select>
+                        <select id="standing-slot" class="p-3 border rounded-xl text-xs font-bold uppercase bg-white">
+                            <option value="1st Delivery">1st Delivery</option>
+                            <option value="2nd Delivery">2nd Delivery</option>
+                        </select>
+                    </div>
+                    <div class="flex space-x-2">
+                        <input id="standing-qty" type="number" placeholder="Qty" class="flex-1 p-3 border rounded-xl text-center font-bold text-blue-600">
+                        <button onclick="addStandingOrder()" class="flex-[2] bg-blue-900 text-white font-bold rounded-xl uppercase text-[10px] tracking-widest">Set Standing Order</button>
+                    </div>
                 </div>
             </div>
+
+            <div id="current-standing-list" class="space-y-2 border-t pt-4">
+                <h3 class="text-[10px] font-black text-slate-400 uppercase text-center mb-4">Your Active Schedules</h3>
+                </div>
         </div>
 
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <h2 class="text-[10px] font-black uppercase text-slate-400 mb-4 tracking-[0.2em] border-b pb-2 text-center font-bold">Recent Global Activity</h2>
-            <div id="history-container" class="space-y-3 text-left"></div>
+            <h2 class="text-[10px] font-black uppercase text-slate-400 mb-4 tracking-[0.2em] border-b pb-2 text-center">Recent Activity</h2>
+            <div id="history-container" class="space-y-3"></div>
         </div>
     </div>
 
@@ -107,15 +125,9 @@
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             const formatted = tomorrow.toISOString().split('T')[0];
-            const dDate = document.getElementById('delivery-date');
-            const aDate = document.getElementById('admin-view-date');
-            if(dDate) dDate.value = formatted;
-            if(aDate) aDate.value = formatted;
+            document.getElementById('delivery-date').value = formatted;
+            document.getElementById('admin-view-date').value = formatted;
         }
-
-        window.onload = function() {
-            setTomorrowDate();
-        };
 
         function handleLogin() {
             const u = document.getElementById('username').value.toLowerCase().trim();
@@ -126,68 +138,119 @@
                 currentUser = found;
                 document.getElementById('login-card').classList.add('hidden');
                 document.getElementById('dashboard').classList.remove('hidden');
-                document.getElementById('welcome-msg').innerText = "Venue: " + found.venue;
-                document.getElementById('user-role-display').innerText = (found.role === 'kitchen' ? 'KITCHEN' : 'VENUE') + " ACCESS";
+                document.getElementById('welcome-msg').innerText = found.venue;
+                document.getElementById('user-role-display').innerText = found.role + " mode";
                 if (found.role === 'kitchen') document.getElementById('kitchen-admin-section').classList.remove('hidden');
+                setTomorrowDate();
                 loadProducts();
                 loadHistory();
+                loadStandingOrders();
             } else { alert("Login Failed"); }
         }
 
         async function loadProducts() {
             const supplier = document.getElementById('supplier-select').value;
-            const container = document.getElementById('product-list');
-            container.innerHTML = `<p class="p-10 text-xs animate-pulse text-center font-bold text-slate-400 uppercase">Syncing Items...</p>`;
             const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
             if (data) {
                 activeProducts = data;
-                container.innerHTML = "";
+                const list = document.getElementById('product-list');
+                const dropdown = document.getElementById('standing-item');
+                list.innerHTML = "";
+                dropdown.innerHTML = `<option value="">Select Item</option>`;
+
                 data.forEach(prod => {
                     if (prod.restricted_to && !prod.restricted_to.split(',').map(v=>v.trim()).includes(currentUser.venue)) return;
+                    
+                    // Daily List
                     const div = document.createElement('div');
-                    div.className = "flex items-center justify-between p-3 border-b border-slate-50 hover:bg-slate-50";
+                    div.className = "flex items-center justify-between p-3 border-b border-slate-50";
+                    div.innerHTML = `<div class="text-left"><p class="text-sm font-bold uppercase">${prod.name}</p><p class="text-[9px] text-slate-400 font-bold">${prod.unit}</p></div><input type="number" id="qty-${prod.id}" data-pid="${prod.id}" data-name="${prod.name}" data-unit="${prod.unit}" min="0" placeholder="0" class="w-14 p-2 border rounded-lg text-center font-bold text-blue-600">`;
+                    list.appendChild(div);
+
+                    // Standing Dropdown
+                    const opt = document.createElement('option');
+                    opt.value = prod.name;
+                    opt.innerText = prod.name;
+                    dropdown.appendChild(opt);
+                });
+            }
+        }
+
+        function toggleDay(btn) {
+            btn.classList.toggle('bg-blue-600');
+            btn.classList.toggle('text-white');
+            btn.classList.toggle('border-blue-600');
+        }
+
+        async function addStandingOrder() {
+            const item = document.getElementById('standing-item').value;
+            const slot = document.getElementById('standing-slot').value;
+            const qty = parseInt(document.getElementById('standing-qty').value);
+            const days = Array.from(document.querySelectorAll('.day-btn.bg-blue-600')).map(b => b.dataset.day);
+
+            if (!item || !qty || days.length === 0) return alert("Select Day, Item and Quantity");
+
+            const { error } = await _supabase.from('standing_orders').insert([{
+                venue_id: currentUser.venue,
+                item_name: item,
+                quantity: qty,
+                delivery_slot: slot,
+                days_of_week: days.join(', ')
+            }]);
+
+            if (!error) {
+                alert("Standing Order Added!");
+                loadStandingOrders();
+                document.getElementById('standing-qty').value = "";
+                document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('bg-blue-600', 'text-white', 'border-blue-600'));
+            }
+        }
+
+        async function loadStandingOrders() {
+            const { data } = await _supabase.from('standing_orders').select('*').eq('venue_id', currentUser.venue);
+            const container = document.getElementById('current-standing-list');
+            if (data) {
+                container.innerHTML = `<h3 class="text-[10px] font-black text-slate-400 uppercase text-center mb-4">Your Active Schedules</h3>`;
+                data.forEach(s => {
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center bg-slate-50 p-3 rounded-lg border text-xs";
                     div.innerHTML = `
                         <div class="text-left">
-                            <p class="text-[13px] font-bold text-slate-800 uppercase leading-none">${prod.name}</p>
-                            <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">${prod.unit} ${prod.lead_time > 1 ? `<span class="text-orange-600">(${prod.lead_time}d)</span>` : ''}</p>
+                            <p class="font-black text-blue-900">${s.item_name} (x${s.quantity})</p>
+                            <p class="text-[9px] text-slate-500 font-bold">${s.days_of_week} | ${s.delivery_slot}</p>
                         </div>
-                        <input type="number" id="qty-${prod.id}" data-pid="${prod.id}" data-name="${prod.name}" data-unit="${prod.unit}" min="0" placeholder="0" class="w-14 p-2 bg-white border border-slate-200 rounded-lg text-center font-bold text-blue-600 outline-none">
+                        <button onclick="deleteStanding(${s.id})" class="text-red-500 font-bold text-[10px]">DELETE</button>
                     `;
                     container.appendChild(div);
                 });
             }
         }
 
+        async function deleteStanding(id) {
+            if(confirm("Delete this schedule?")) {
+                await _supabase.from('standing_orders').delete().eq('id', id);
+                loadStandingOrders();
+            }
+        }
+
+        function switchTab(view) {
+            document.getElementById('view-daily').classList.toggle('hidden', view !== 'daily');
+            document.getElementById('view-standing').classList.toggle('hidden', view !== 'standing');
+            document.getElementById('tab-daily').classList.toggle('tab-active', view === 'daily');
+            document.getElementById('tab-standing').classList.toggle('tab-active', view === 'standing');
+        }
+
         async function submitOrder() {
             const dateStr = document.getElementById('delivery-date').value;
-            if (!dateStr) return alert("Select Date");
-            const now = new Date();
-            const selectedDate = new Date(dateStr);
-            selectedDate.setHours(0,0,0,0);
-            const today = new Date(); today.setHours(0,0,0,0);
-            const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-            const isKitchen = (currentUser.role === 'kitchen');
-            if (selectedDate <= today && !isKitchen) return alert("Too late for today.");
-            if (selectedDate.getTime() === tomorrow.getTime() && now.getHours() >= 13 && !isKitchen) return alert("Past 1PM cutoff.");
-
             const orderItems = [];
             const inputs = document.querySelectorAll('#product-list input');
-            let ltViolation = false;
 
             inputs.forEach(el => {
                 const q = parseInt(el.value) || 0;
-                if (q > 0) {
-                    const p = activeProducts.find(x => x.id == el.dataset.pid);
-                    if (p && !isKitchen) {
-                        const minDate = new Date(today);
-                        minDate.setDate(today.getDate() + (p.lead_time || 1));
-                        if (selectedDate < minDate) { alert(`LEAD ERROR: ${p.name}`); ltViolation = true; }
-                    }
-                    orderItems.push({ name: el.dataset.name, quantity: q, unit: el.dataset.unit });
-                }
+                if (q > 0) orderItems.push({ name: el.dataset.name, quantity: q, unit: el.dataset.unit });
             });
 
-            if (ltViolation || orderItems.length === 0) return;
+            if (orderItems.length === 0) return alert("Empty Order");
 
             const { error } = await _supabase.from('orders').insert([{
                 venue_id: currentUser.venue,
@@ -197,83 +260,67 @@
                 comment: document.getElementById('order-comment').value
             }]);
 
-            if (document.getElementById('save-standing-order').checked) {
-                localStorage.setItem(`standing_${currentUser.venue}`, JSON.stringify(orderItems));
-                alert("Standing Order Saved!");
-            }
-
-            if (!error) { alert("ORDER SENT SUCCESS!"); loadHistory(); inputs.forEach(i => i.value = ""); document.getElementById('order-comment').value = ""; }
-        }
-
-        function loadStandingOrder() {
-            const raw = localStorage.getItem(`standing_${currentUser.venue}`);
-            if (!raw) return alert("No standing order saved.");
-            const items = JSON.parse(raw);
-            items.forEach(item => {
-                const inputs = document.querySelectorAll('#product-list input');
-                inputs.forEach(inp => { if (inp.dataset.name === item.name) inp.value = item.quantity; });
-            });
-            alert("Standing order quantities loaded!");
+            if (!error) { alert("Sent!"); loadHistory(); inputs.forEach(i => i.value=""); }
         }
 
         async function generateConsolidatedReport() {
-            const date = document.getElementById('admin-view-date').value;
-            const container = document.getElementById('consolidated-results');
-            container.innerHTML = "<p class='animate-pulse text-center p-10 font-bold uppercase'>Processing Master List...</p>";
-            container.classList.remove('hidden');
-
-            const { data } = await _supabase.from('orders').select('*').eq('delivery_date', date);
-            if (!data || data.length === 0) {
-                container.innerHTML = "<p class='text-red-500 font-bold p-10 text-center uppercase'>No orders for this date.</p>";
-                return;
-            }
-
-            const totals = {};
-            data.forEach(o => { o.items.forEach(i => {
-                const key = `${i.name} (${i.unit})`;
-                totals[key] = (totals[key] || 0) + i.quantity;
-            });});
-
-            let html = `<div class="flex justify-between items-center mb-4 border-b pb-2"><h3 class="text-slate-800 font-black text-xs uppercase tracking-widest">1. TOTAL PICK LIST</h3><button onclick="window.print()" class="text-[10px] bg-slate-100 px-2 py-1 rounded font-bold uppercase">Print</button></div><ul class="space-y-1 mb-8">`;
-            for (const [name, qty] of Object.entries(totals)) {
-                html += `<li class="flex justify-between border-b border-slate-50 py-1 font-bold text-sm"><span>${name}</span> <span class="text-blue-600 font-black">x${qty}</span></li>`;
-            }
-            html += `</ul><h3 class="text-slate-800 font-black text-xs uppercase mb-4 border-b pb-2 tracking-widest">2. ORDERS BY VENUE</h3>`;
+            const dateStr = document.getElementById('admin-view-date').value;
+            const targetDate = new Date(dateStr);
+            const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            const targetDay = dayNames[targetDate.getDay()];
             
-            data.forEach(o => {
-                html += `
-                    <div class="mb-6 bg-white p-4 rounded-xl border-2 border-slate-100">
-                        <div class="flex justify-between mb-3 font-black text-blue-700 uppercase tracking-tighter italic border-b pb-1">
-                            <span>${o.venue_id}</span> 
-                            <span class="text-[9px] text-slate-400">${o.delivery_slot}</span>
-                        </div>
-                        <ul class="space-y-1">
-                            ${o.items.map(i => `
-                                <li class="flex justify-between text-xs font-semibold text-slate-700 border-b border-slate-50 py-1 last:border-0">
-                                    <span>${i.name}</span>
-                                    <span class="text-blue-600 font-black">x${i.quantity}</span>
-                                </li>
-                            `).join('')}
-                        </ul>
-                        ${o.comment ? `<div class="mt-3 text-[10px] bg-red-50 p-2 rounded text-red-600 font-bold border border-red-100 italic uppercase">Note: ${o.comment}</div>` : ''}
-                    </div>
-                `;
+            const results = document.getElementById('consolidated-results');
+            results.innerHTML = "Syncing..."; results.classList.remove('hidden');
+
+            // 1. Fetch One-Off Orders
+            const { data: oneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', dateStr);
+            // 2. Fetch Standing Orders matching this day
+            const { data: standings } = await _supabase.from('standing_orders').select('*');
+            const relevantStandings = standings.filter(s => s.days_of_week.includes(targetDay));
+
+            const finalTotals = {};
+            const venueView = {};
+
+            // Process Standings first
+            relevantStandings.forEach(s => {
+                const key = s.item_name;
+                finalTotals[key] = (finalTotals[key] || 0) + s.quantity;
+                if(!venueView[s.venue_id]) venueView[s.venue_id] = [];
+                venueView[s.venue_id].push({ name: s.item_name, quantity: s.quantity, type: 'STANDING' });
             });
-            container.innerHTML = html;
+
+            // Process One-Offs
+            oneOffs.forEach(o => {
+                o.items.forEach(i => {
+                    finalTotals[i.name] = (finalTotals[i.name] || 0) + i.quantity;
+                    if(!venueView[o.venue_id]) venueView[o.venue_id] = [];
+                    venueView[o.venue_id].push({ name: i.name, quantity: i.quantity, type: 'ONEOFF' });
+                });
+            });
+
+            let html = `<h4 class="font-black border-b mb-2">1. MASTER PICK LIST (${targetDay} ${dateStr})</h4>`;
+            for (const [name, qty] of Object.entries(finalTotals)) {
+                html += `<div class="flex justify-between border-b py-1 text-sm font-bold"><span>${name}</span><span>x${qty}</span></div>`;
+            }
+
+            html += `<h4 class="font-black border-b mt-6 mb-2">2. BY VENUE</h4>`;
+            for (const [venue, items] of Object.entries(venueView)) {
+                html += `<div class="mb-4 bg-slate-50 p-2 border rounded"><p class="font-black text-blue-700">${venue}</p>`;
+                items.forEach(i => {
+                    html += `<p class="text-xs font-semibold">${i.name} x${i.quantity} <span class="text-[9px] text-slate-400">(${i.type})</span></p>`;
+                });
+                html += `</div>`;
+            }
+            results.innerHTML = html;
         }
 
         async function loadHistory() {
-            const container = document.getElementById('history-container');
             const { data } = await _supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(10);
             if (data) {
-                container.innerHTML = data.map(o => `
-                    <div class="p-3 bg-slate-50 rounded-xl text-[11px] border border-slate-100 shadow-sm mb-2">
-                        <div class="flex justify-between font-black mb-1 uppercase tracking-tighter text-[10px]">
-                            <span class="text-blue-600">${o.venue_id}</span>
-                            <span class="text-slate-400">DEL: ${o.delivery_date}</span>
-                        </div>
-                        <div class="text-slate-800 italic leading-tight">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</div>
-                        ${o.comment ? `<div class="mt-2 text-red-600 font-bold border-t pt-1 italic text-[10px] uppercase">REQ: ${o.comment}</div>` : ''}
+                document.getElementById('history-container').innerHTML = data.map(o => `
+                    <div class="p-3 bg-slate-50 rounded-xl text-[11px] border text-left">
+                        <div class="flex justify-between font-black uppercase"><span class="text-blue-600">${o.venue_id}</span><span>DEL: ${o.delivery_date}</span></div>
+                        <p class="italic text-slate-700">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</p>
                     </div>
                 `).join('');
             }
