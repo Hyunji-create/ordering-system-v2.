@@ -33,7 +33,7 @@ window.handleLogin = function() {
 function startApp() {
     _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     setTomorrowDate();
-    populateSuppliers();
+    populateSuppliers(); // Re-added this to fix your error
     loadStandingOrders();
 }
 
@@ -61,7 +61,13 @@ window.switchTab = function(view) {
 };
 
 // PRODUCT LOADING
-async function loadProducts() {
+window.populateSuppliers = function() {
+    const select = document.getElementById('supplier-select');
+    if(select && !select.innerHTML) select.innerHTML = `<option value="CK">CK</option><option value="DSQ">DSQ</option><option value="GJ">GJ</option>`;
+    loadProducts();
+};
+
+window.loadProducts = async function() {
     const supplier = document.getElementById('supplier-select').value;
     const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
     if (data) {
@@ -81,17 +87,9 @@ async function loadProducts() {
                             <p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p>
                             <button onclick="toggleNote('${p.name}')" class="text-[9px] font-black text-blue-500 uppercase mt-1">📝 Note</button>
                         </div>
-                        
                         <div class="flex items-center gap-2">
                             <button type="button" onclick="adjustQty('${p.name}', -1)" class="qty-btn">-</button>
-                            <input type="number" 
-                                   id="qty-${p.name}"
-                                   oninput="validateChanges()" 
-                                   data-name="${p.name}" 
-                                   value="0" 
-                                   inputmode="numeric" 
-                                   pattern="[0-9]*"
-                                   class="w-12 h-11 bg-white border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
+                            <input type="number" id="qty-${p.name}" oninput="validateChanges()" data-name="${p.name}" value="0" inputmode="numeric" pattern="[0-9]*" class="w-12 h-11 bg-white border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
                             <button type="button" onclick="adjustQty('${p.name}', 1)" class="qty-btn">+</button>
                         </div>
                     </div>
@@ -101,22 +99,42 @@ async function loadProducts() {
         });
         applyStandingToDaily();
     }
-}
+};
 
 window.toggleNote = function(name) {
     const el = document.getElementById(`note-${name}`);
     el.style.display = el.style.display === 'block' ? 'none' : 'block';
 };
 
-// DAILY ORDER LOGIC
-function checkFormLock() {
+// QTY ADJUSTMENT
+window.adjustQty = function(itemName, change) {
+    const isLocked = isOrderLocked();
+    if (isLocked) return;
+    const input = document.getElementById(`qty-${itemName}`);
+    if (input) {
+        let val = parseInt(input.value) || 0;
+        val = Math.max(0, val + change);
+        input.value = val;
+        validateChanges();
+    }
+};
+
+// LOCK LOGIC
+function isOrderLocked() {
     const dateStr = document.getElementById('delivery-date').value;
     const now = new Date();
     const orderDate = new Date(dateStr + "T00:00:00");
     const today = new Date(); today.setHours(0,0,0,0);
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
 
-    let isLocked = (orderDate <= today) || (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
+    if (orderDate <= today) return true;
+    if (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13) return true;
+    return false;
+}
+
+// DAILY ORDER LOGIC
+function checkFormLock() {
+    const isLocked = isOrderLocked();
     const btn = document.getElementById('save-btn'), msg = document.getElementById('lock-msg');
     const qtyInputs = document.querySelectorAll('#product-list input[type="number"]');
     
@@ -127,7 +145,6 @@ function checkFormLock() {
     } else {
         msg.classList.add('hidden');
         qtyInputs.forEach(i => i.classList.remove('locked-qty'));
-        validateChanges();
     }
     return isLocked;
 }
@@ -164,6 +181,7 @@ window.applyStandingToDaily = async function() {
         });
     }
     captureState();
+    checkFormLock();
 };
 
 function captureState() {
@@ -172,7 +190,6 @@ function captureState() {
     document.querySelectorAll('.note-input').forEach(i => state.push(i.value));
     state.push(document.getElementById('order-comment').value);
     initialFormState = JSON.stringify(state);
-    validateChanges();
 }
 
 window.validateChanges = function() {
@@ -180,10 +197,10 @@ window.validateChanges = function() {
     document.querySelectorAll('#product-list input').forEach(i => state.push(i.value));
     document.querySelectorAll('.note-input').forEach(i => state.push(i.value));
     state.push(document.getElementById('order-comment').value);
-    
     const currentFormState = JSON.stringify(state);
+    
     const btn = document.getElementById('save-btn');
-    const isLocked = checkFormLock();
+    const isLocked = isOrderLocked();
 
     if (currentFormState !== initialFormState) {
         btn.classList.remove('btn-disabled');
@@ -198,7 +215,6 @@ window.submitOrder = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
     const items = [];
-    
     document.querySelectorAll('#product-list .item-row').forEach(row => {
         const q = parseInt(row.querySelector('input[type="number"]').value) || 0;
         const name = row.querySelector('input[type="number"]').dataset.name;
@@ -208,120 +224,70 @@ window.submitOrder = async function() {
 
     const generalNote = document.getElementById('order-comment').value;
     const payload = { venue_id: currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items: items, comment: generalNote };
-    
     let res = currentDBOrder ? await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id) : await _supabase.from('orders').insert([payload]);
     if (!res.error) { alert("Sent to Kitchen!"); applyStandingToDaily(); }
 };
 
-// CONSOLIDATED REPORT - REFINED TO ENSURE GENERAL NOTES SHOW
+// CONSOLIDATED REPORT
 window.generateConsolidatedReport = async function() {
     const dateStr = document.getElementById('admin-view-date').value;
-    const d = new Date(dateStr + "T00:00:00");
-    const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
+    const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr + "T00:00:00").getDay()];
     const res = document.getElementById('consolidated-results');
     res.innerHTML = "LOADING..."; res.classList.remove('hidden');
 
     try {
         const { data: oneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', dateStr);
         const { data: standings } = await _supabase.from('standing_orders').select('*');
-        
         const venueReport = {};
-        const VENUES = ["WYN", "MCC", "WSQ", "DSQ", "GJ"];
-        
-        // Initialize venue structure
-        VENUES.forEach(v => { 
-            venueReport[v] = { 
-                "1st Delivery": { items: [], note: "" }, 
-                "2nd Delivery": { items: [], note: "" } 
-            }; 
-        });
+        ["WYN", "MCC", "WSQ", "DSQ", "GJ"].forEach(v => { venueReport[v] = { "1st Delivery": {items:[], note:""}, "2nd Delivery": {items:[], note:""} }; });
 
-        // 1. Process Standings (Baseline)
         (standings || []).forEach(s => {
             if(s.days_of_week && s.days_of_week.includes(targetDay)) {
-                if(!venueReport[s.venue_id]) {
-                    venueReport[s.venue_id] = { "1st Delivery": {items:[], note:""}, "2nd Delivery": {items:[], note:""} };
-                }
+                if(!venueReport[s.venue_id]) venueReport[s.venue_id] = { "1st Delivery": {items:[], note:""}, "2nd Delivery": {items:[], note:""} };
                 venueReport[s.venue_id][s.delivery_slot].items.push({ name: s.item_name, qty: s.quantity });
             }
         });
 
-        // 2. Process Manual Orders (The "Final Word" and Late Notes)
         (oneOffs || []).forEach(o => {
-            if(!venueReport[o.venue_id]) {
-                venueReport[o.venue_id] = { "1st Delivery": {items:[], note:""}, "2nd Delivery": {items:[], note:""} };
-            }
-            
-            // Overwrite items for this specific slot
-            venueReport[o.venue_id][o.delivery_slot].items = o.items.map(i => ({ 
-                name: i.name, 
-                qty: i.quantity, 
-                note: i.comment || "" 
-            }));
-            
-            // Explicitly capture the general note for this specific slot
-            if (o.comment && o.comment.trim() !== "") {
-                venueReport[o.venue_id][o.delivery_slot].note = o.comment;
-            }
+            if(!venueReport[o.venue_id]) venueReport[o.venue_id] = { "1st Delivery": {items:[], note:""}, "2nd Delivery": {items:[], note:""} };
+            venueReport[o.venue_id][o.delivery_slot].items = o.items.map(i => ({ name: i.name, qty: i.quantity, note: i.comment || "" }));
+            if (o.comment) venueReport[o.venue_id][o.delivery_slot].note = o.comment;
         });
 
         let html = `<div class="flex justify-between border-b pb-2 mb-4 uppercase text-[10px] font-black text-blue-900"><span>Loading Plan (${dateStr})</span><button onclick="window.print()" class="underline">Print</button></div>`;
-        
-        const sortedVenues = Object.keys(venueReport).sort();
-        sortedVenues.forEach(v => {
+        Object.keys(venueReport).sort().forEach(v => {
             const vData = venueReport[v];
             const has1st = vData["1st Delivery"].items.length > 0 || vData["1st Delivery"].note;
             const has2nd = vData["2nd Delivery"].items.length > 0 || vData["2nd Delivery"].note;
-            
             if(has1st || has2nd) {
-                html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-slate-50 text-left border-slate-100 shadow-sm">
-                            <h3 class="font-black text-blue-800 text-lg border-b pb-1 mb-3 italic">${v}</h3>`;
-                
+                html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-slate-50 text-left border-slate-100"><h3 class="font-black text-blue-800 text-lg border-b pb-1 mb-3 italic">${v}</h3>`;
                 ["1st Delivery", "2nd Delivery"].forEach(slot => {
-                    const slotData = vData[slot];
-                    const activeItems = slotData.items.filter(i => i.qty > 0).sort(sortItemsByCustomOrder);
-                    
-                    if(activeItems.length > 0 || slotData.note) {
-                        html += `<div class="mb-4">
-                                    <p class="text-[9px] font-black text-slate-400 uppercase italic mb-1 border-l-4 border-blue-400 pl-2">${slot}</p>`;
-                        
+                    const activeItems = vData[slot].items.filter(i => i.qty > 0).sort(sortItemsByCustomOrder);
+                    if(activeItems.length > 0 || vData[slot].note) {
+                        html += `<div class="mb-4"><p class="text-[9px] font-black text-slate-400 uppercase italic mb-1 border-l-4 border-blue-400 pl-2">${slot}</p>`;
                         activeItems.forEach(i => {
-                            html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-white">
-                                        <span>${i.name}</span><span class="text-blue-600">x${i.qty}</span>
-                                     </div>`;
-                            if(i.note && i.note.trim() !== "") {
-                                html += `<p class="text-[10px] text-red-600 font-bold italic mb-1 leading-tight">↳ Item: ${i.note}</p>`;
-                            }
+                            html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-white"><span>${i.name}</span><span class="text-blue-600">x${i.qty}</span></div>`;
+                            if(i.note) html += `<p class="text-[10px] text-red-600 font-bold italic mb-1 leading-tight">↳ Item: ${i.note}</p>`;
                         });
-
-                        // Display General Venue Note for this slot
-                        if(slotData.note) {
-                            html += `
-                            <div class="mt-2 p-2 bg-red-100 border border-red-200 rounded-lg">
-                                <p class="text-[9px] text-red-700 font-black uppercase tracking-tighter mb-0.5">⚠️ General Delivery Note:</p>
-                                <p class="text-[11px] text-red-800 font-bold italic leading-tight">${slotData.note}</p>
-                            </div>`;
-                        }
+                        if(vData[slot].note) html += `<div class="mt-2 p-2 bg-red-100 border border-red-200 rounded-lg"><p class="text-[9px] text-red-700 font-black uppercase tracking-tighter mb-1">⚠️ Delivery Note:</p><p class="text-[11px] text-red-800 font-bold italic">${vData[slot].note}</p></div>`;
                         html += `</div>`;
                     }
                 });
                 html += `</div>`;
             }
         });
-        res.innerHTML = html || `<p class="text-center p-10 text-slate-400 font-bold">No orders found.</p>`;
-    } catch (e) { 
-        res.innerHTML = "Error loading list. Check console."; 
-        console.error("Report Error:", e); 
-    }
+        res.innerHTML = html || `<p class="text-center p-10 text-slate-400 font-bold">No orders.</p>`;
+    } catch (e) { res.innerHTML = "Error loading list."; console.error(e); }
 };
 
-// STANDING ORDER HELPERS
+// STANDING ORDERS
 async function loadStandingOrders() {
     const { data } = await _supabase.from('standing_orders').select('*').eq('venue_id', currentUser.venue);
     allStandingOrders = data || [];
     renderStandingList();
     applyStandingToDaily();
 }
+
 function renderStandingList() {
     const cont = document.getElementById('standing-items-container'); if(!cont) return;
     cont.innerHTML = "";
@@ -341,6 +307,7 @@ function renderStandingList() {
         }
     });
 }
+
 window.addStandingOrder = async function() {
     const item = document.getElementById('standing-item').value, slot = document.getElementById('standing-slot').value, qty = parseInt(document.getElementById('standing-qty').value);
     const days = Array.from(document.querySelectorAll('.day-active')).map(b => b.dataset.day);
@@ -348,16 +315,5 @@ window.addStandingOrder = async function() {
     await _supabase.from('standing_orders').insert([{ venue_id: currentUser.venue, item_name: item, quantity: qty, delivery_slot: slot, days_of_week: days.join(', ') }]);
     alert("Added!"); loadStandingOrders();
 };
+
 window.deleteStanding = async function(id) { if(confirm("Remove?")) { await _supabase.from('standing_orders').delete().eq('id', id); loadStandingOrders(); } };
-window.toggleDay = function(btn) { btn.classList.toggle('day-active'); };
-window.adjustQty = function(itemName, change) {
-    if (checkFormLock()) return;
-    const input = document.getElementById(`qty-${itemName}`);
-    if (input) {
-        let currentVal = parseInt(input.value) || 0;
-        let newVal = currentVal + change;
-        if (newVal < 0) newVal = 0;
-        input.value = newVal;
-        validateChanges();
-    }
-};
