@@ -1,3 +1,4 @@
+// --- CONFIGURATION ---
 const PRODUCT_ORDER = ["Matcha", "Hojicha", "Strawberry Puree", "Chia Pudding", "Mango Puree", "Vanilla Syrup", "Simple Syrup", "Ice"];
 const LEAD_2_DAY_ITEMS = ["Vanilla Syrup", "Simple Syrup", "Yuzu Juice"];
 
@@ -14,6 +15,7 @@ const USERS = [
 let _supabase, initialFormState = "", currentDBOrder = null;
 let allStandingOrders = [];
 let activeProducts = [];
+let originalKitchenVenue = ""; // To help managers reset after overriding
 
 // --- LOGIN & STARTUP ---
 window.handleLogin = function() {
@@ -21,7 +23,8 @@ window.handleLogin = function() {
     const p = document.getElementById('password').value.trim();
     const found = USERS.find(x => x.id === u && x.pw === p);
     if (found) {
-        window.currentUser = found;
+        window.currentUser = JSON.parse(JSON.stringify(found)); // Deep copy
+        if (found.role === 'kitchen') originalKitchenVenue = found.venue;
         document.getElementById('login-card').classList.add('hidden');
         document.getElementById('dashboard').classList.remove('hidden');
         document.getElementById('welcome-msg').innerText = found.venue;
@@ -76,7 +79,7 @@ async function loadProducts() {
         
         activeProducts.forEach(p => {
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
-            if (p.restricted_to && !allowed.includes(currentUser.venue)) return;
+            if (p.restricted_to && !allowed.includes(window.currentUser.venue)) return;
             
             const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
             const leadBadge = isLeadItem ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase tracking-tighter">⚠️ 2-Day Lead</span>` : "";
@@ -109,7 +112,7 @@ window.toggleNote = function(name) {
 };
 
 window.adjustQty = function(itemName, change) {
-    if (isItemLocked(itemName)) return;
+    if (window.currentUser.role !== 'kitchen' && isItemLocked(itemName)) return;
     const input = document.getElementById(`qty-${itemName}`);
     if (input) {
         let val = parseInt(input.value) || 0;
@@ -119,7 +122,9 @@ window.adjustQty = function(itemName, change) {
     }
 };
 
+// --- LOCK LOGIC ---
 function isItemLocked(itemName) {
+    if (window.currentUser.role === 'kitchen') return false; 
     const dateStr = document.getElementById('delivery-date').value;
     const now = new Date();
     const orderDate = new Date(dateStr + "T00:00:00");
@@ -127,9 +132,8 @@ function isItemLocked(itemName) {
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
     const dayAfter = new Date(today); dayAfter.setDate(today.getDate() + 2);
 
-    const isTwoDayItem = LEAD_2_DAY_ITEMS.includes(itemName);
     if (orderDate <= today) return true;
-    if (isTwoDayItem) {
+    if (LEAD_2_DAY_ITEMS.includes(itemName)) {
         if (orderDate.getTime() === tomorrow.getTime()) return true;
         if (orderDate.getTime() === dayAfter.getTime() && now.getHours() >= 13) return true;
     }
@@ -141,13 +145,17 @@ function checkFormLock() {
     const dateStr = document.getElementById('delivery-date').value;
     const orderDate = new Date(dateStr + "T00:00:00");
     const today = new Date(); today.setHours(0,0,0,0);
-    const btn = document.getElementById('save-btn');
-    const msg = document.getElementById('lock-msg');
     const now = new Date();
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    
     let totalLocked = (orderDate <= today) || (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
-    if (totalLocked) { btn.classList.add('btn-disabled'); msg.classList.remove('hidden'); } 
-    else { msg.classList.add('hidden'); }
+    const btn = document.getElementById('save-btn'), msg = document.getElementById('lock-msg');
+
+    if (totalLocked && window.currentUser.role !== 'kitchen') { 
+        btn.classList.add('btn-disabled'); msg.classList.remove('hidden'); 
+    } else {
+        msg.classList.add('hidden');
+    }
 
     activeProducts.forEach(p => {
         const locked = isItemLocked(p.name);
@@ -160,15 +168,19 @@ function checkFormLock() {
     });
 }
 
+// --- DAILY ORDER CORE ---
 window.applyStandingToDaily = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr + "T00:00:00").getDay()];
+
     document.querySelectorAll('#product-list input[type="number"]').forEach(i => { i.value = "0"; i.classList.remove('auto-filled'); });
     document.querySelectorAll('.note-input').forEach(i => { i.value = ""; i.style.display = 'none'; });
     document.getElementById('order-comment').value = "";
-    const { data } = await _supabase.from('orders').select('*').eq('venue_id', currentUser.venue).eq('delivery_date', dateStr).eq('delivery_slot', slot).maybeSingle();
+
+    const { data } = await _supabase.from('orders').select('*').eq('venue_id', window.currentUser.venue).eq('delivery_date', dateStr).eq('delivery_slot', slot).maybeSingle();
     currentDBOrder = data;
+
     if (data) {
         data.items.forEach(item => {
             const inp = document.getElementById(`qty-${item.name}`);
@@ -179,7 +191,7 @@ window.applyStandingToDaily = async function() {
         });
         document.getElementById('order-comment').value = data.comment || "";
     } else {
-        const matches = allStandingOrders.filter(s => s.days_of_week.includes(targetDay) && s.delivery_slot === slot);
+        const matches = allStandingOrders.filter(s => s.venue_id === window.currentUser.venue && s.days_of_week.includes(targetDay) && s.delivery_slot === slot);
         matches.forEach(s => { const inp = document.getElementById(`qty-${s.item_name}`); if (inp) { inp.value = s.quantity; inp.classList.add('auto-filled'); } });
     }
     captureState();
@@ -202,8 +214,13 @@ window.validateChanges = function() {
     state.push(document.getElementById('order-comment').value);
     const currentFormState = JSON.stringify(state);
     const btn = document.getElementById('save-btn');
-    if (currentFormState !== initialFormState) { btn.classList.remove('btn-disabled'); btn.innerText = "Save Changes"; } 
-    else { btn.classList.add('btn-disabled'); btn.innerText = "No Changes"; }
+    
+    if (currentFormState !== initialFormState) { 
+        btn.classList.remove('btn-disabled'); 
+        btn.innerText = window.currentUser.role === 'kitchen' ? "Override & Save" : (isOrderLocked() ? "Send Note Only" : "Save Changes");
+    } else { 
+        btn.classList.add('btn-disabled'); btn.innerText = "No Changes"; 
+    }
 };
 
 window.submitOrder = async function() {
@@ -214,48 +231,42 @@ window.submitOrder = async function() {
         const inp = row.querySelector('input[type="number"]');
         items.push({ name: inp.dataset.name, quantity: parseInt(inp.value) || 0, comment: row.querySelector('.note-input').value });
     });
-    const payload = { venue_id: currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items: items, comment: document.getElementById('order-comment').value };
+    const payload = { venue_id: window.currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items: items, comment: document.getElementById('order-comment').value };
     let res = currentDBOrder ? await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id) : await _supabase.from('orders').insert([payload]);
-    if (!res.error) { alert("Sent to Kitchen!"); applyStandingToDaily(); }
+    if (!res.error) { alert("Success!"); applyStandingToDaily(); }
 };
 
-// --- CONSOLIDATED REPORT (WITH CK PREP LIST & UPCOMING 2-DAY LIST) ---
+// --- CONSOLIDATED REPORT (WITH EDIT & PREP LISTS) ---
 window.generateConsolidatedReport = async function() {
     const dateStr = document.getElementById('admin-view-date').value;
     const targetDateObj = new Date(dateStr + "T00:00:00");
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDateObj.getDay()];
-    
-    // Calculate "Day After" for 2-day lead items
-    const nextDateObj = new Date(targetDateObj);
-    nextDateObj.setDate(targetDateObj.getDate() + 1);
+    const nextDateObj = new Date(targetDateObj); nextDateObj.setDate(targetDateObj.getDate() + 1);
     const nextDateStr = nextDateObj.toISOString().split('T')[0];
     const nextDayName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][nextDateObj.getDay()];
-
     const res = document.getElementById('consolidated-results');
     res.innerHTML = "LOADING..."; res.classList.remove('hidden');
 
     try {
-        // Fetch Today's Orders & Next Day's Orders (for 2-day lead prep)
         const { data: oneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', dateStr);
         const { data: upcomingOneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', nextDateStr);
         const { data: standings } = await _supabase.from('standing_orders').select('*');
-        
         const venueReport = {};
         const totalCounts = {};
         const upcomingLeadTotals = {};
-        
         PRODUCT_ORDER.forEach(p => totalCounts[p] = 0);
         LEAD_2_DAY_ITEMS.forEach(p => upcomingLeadTotals[p] = 0);
-
         ["WYN", "MCC", "WSQ", "DSQ", "GJ"].forEach(v => { venueReport[v] = { "1st Delivery": {items:[], note:""}, "2nd Delivery": {items:[], note:""} }; });
 
-        // 1. Process CURRENT Day
         (standings || []).forEach(s => {
             if(s.days_of_week && s.days_of_week.includes(targetDay)) {
                 if(venueReport[s.venue_id]) {
                     venueReport[s.venue_id][s.delivery_slot].items.push({ name: s.item_name, qty: s.quantity });
                     if(totalCounts.hasOwnProperty(s.item_name)) totalCounts[s.item_name] += s.quantity;
                 }
+            }
+            if(s.days_of_week && s.days_of_week.includes(nextDayName) && LEAD_2_DAY_ITEMS.includes(s.item_name)) {
+                upcomingLeadTotals[s.item_name] += s.quantity;
             }
         });
         (oneOffs || []).forEach(o => {
@@ -266,59 +277,38 @@ window.generateConsolidatedReport = async function() {
                 o.items.forEach(i => { if(totalCounts.hasOwnProperty(i.name)) totalCounts[i.name] += i.quantity; });
             }
         });
-
-        // 2. Process UPCOMING (Next Day) 2-Day Lead Items ONLY
-        if (window.currentUser.venue === 'CK') {
-            (standings || []).forEach(s => {
-                if(s.days_of_week && s.days_of_week.includes(nextDayName) && LEAD_2_DAY_ITEMS.includes(s.item_name)) {
-                    upcomingLeadTotals[s.item_name] += s.quantity;
-                }
-            });
-            (upcomingOneOffs || []).forEach(o => {
-                // If a manual order exists for next day, replace the standing count for lead items
-                o.items.forEach(i => {
-                    if (LEAD_2_DAY_ITEMS.includes(i.name)) {
-                        // Find if there was a standing order for this item/venue/slot to subtract first
-                        const matchStanding = (standings || []).find(s => s.venue_id === o.venue_id && s.delivery_slot === o.delivery_slot && s.item_name === i.name && s.days_of_week.includes(nextDayName));
-                        if (matchStanding) upcomingLeadTotals[i.name] -= matchStanding.quantity;
-                        upcomingLeadTotals[i.name] += i.quantity;
-                    }
-                });
-            });
-        }
+        (upcomingOneOffs || []).forEach(o => { o.items.forEach(i => { if (LEAD_2_DAY_ITEMS.includes(i.name)) {
+            const matchStanding = (standings || []).find(s => s.venue_id === o.venue_id && s.delivery_slot === o.delivery_slot && s.item_name === i.name && s.days_of_week.includes(nextDayName));
+            if (matchStanding) upcomingLeadTotals[i.name] -= matchStanding.quantity;
+            upcomingLeadTotals[i.name] += i.quantity;
+        } }); });
 
         let html = `<div class="flex justify-between border-b pb-2 mb-4 uppercase text-[10px] font-black text-blue-900"><span>Loading Plan (${dateStr})</span><button onclick="window.print()" class="underline">Print</button></div>`;
-
-        if (window.currentUser.venue === 'CK') {
-            html += `<div class="mb-6 p-4 border-2 border-blue-600 bg-blue-50 rounded-2xl text-left shadow-md">
-                        <h3 class="font-black text-blue-900 text-lg border-b border-blue-200 pb-1 mb-3 uppercase italic">Total Prep (For ${dateStr})</h3>
-                        <div class="grid grid-cols-1 gap-1 mb-6">`;
-            PRODUCT_ORDER.forEach(p => {
-                html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-blue-100"><span class="text-slate-700">${p}</span><span class="text-blue-700 bg-white px-3 rounded-lg border">x ${totalCounts[p]}</span></div>`;
-            });
-            html += `</div>
-                     <h3 class="font-black text-orange-600 text-lg border-b border-orange-200 pb-1 mb-3 uppercase italic">Upcoming Production (For ${nextDateStr})</h3>
-                     <p class="text-[9px] font-bold text-orange-400 mb-3 uppercase italic">Start preparing these today for delivery on ${nextDateStr}</p>
+        if (window.currentUser.role === 'kitchen') {
+            html += `<div class="mb-6 p-4 border-2 border-blue-600 bg-blue-50 rounded-2xl text-left">
+                        <h3 class="font-black text-blue-900 text-lg border-b border-blue-200 pb-1 mb-3 italic">TOTAL PREP (${dateStr})</h3>
+                        <div class="grid grid-cols-1 gap-1 mb-4">`;
+            PRODUCT_ORDER.forEach(p => { html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-blue-100"><span>${p}</span><span>x ${totalCounts[p]}</span></div>`; });
+            html += `</div><h3 class="font-black text-orange-600 text-lg border-b border-orange-200 pb-1 mb-3 italic">UPCOMING (${nextDateStr})</h3>
                      <div class="grid grid-cols-1 gap-1">`;
-            LEAD_2_DAY_ITEMS.forEach(p => {
-                html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-orange-100"><span class="text-slate-700">${p}</span><span class="text-orange-600 bg-white px-3 rounded-lg border">x ${upcomingLeadTotals[p]}</span></div>`;
-            });
+            LEAD_2_DAY_ITEMS.forEach(p => { html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-orange-100"><span>${p}</span><span>x ${upcomingLeadTotals[p]}</span></div>`; });
             html += `</div></div>`;
         }
 
         Object.keys(venueReport).sort().forEach(v => {
             const vData = venueReport[v];
             if(vData["1st Delivery"].items.length > 0 || vData["2nd Delivery"].items.length > 0 || vData["1st Delivery"].note || vData["2nd Delivery"].note) {
-                html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-slate-50 text-left border-slate-100"><h3 class="font-black text-blue-800 text-lg border-b pb-1 mb-3 italic">${v}</h3>`;
+                html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-white text-left border-slate-200"><h3 class="font-black text-blue-800 text-lg border-b pb-1 mb-3 uppercase italic">${v}</h3>`;
                 ["1st Delivery", "2nd Delivery"].forEach(slot => {
                     const activeItems = vData[slot].items.filter(i => i.qty > 0).sort(sortItemsByCustomOrder);
                     if(activeItems.length > 0 || vData[slot].note) {
-                        html += `<div class="mb-4"><p class="text-[9px] font-black text-slate-400 uppercase italic mb-1 border-l-4 border-blue-400 pl-2">${slot}</p>`;
+                        html += `<div class="mb-4"><div class="flex justify-between items-center mb-1 border-l-4 border-blue-400 pl-2"><p class="text-[9px] font-black text-slate-400 italic">${slot}</p>
+                                ${window.currentUser.role === 'kitchen' ? `<button onclick="editVenueOrder('${v}', '${dateStr}', '${slot}')" class="text-[9px] font-black text-blue-600 underline uppercase">✏️ Adjust</button>` : ""}</div>`;
                         activeItems.forEach(i => {
-                            html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-white"><span>${i.name}</span><span class="text-blue-600">x${i.qty}</span></div>`;
-                            if(i.note) html += `<p class="text-[10px] text-red-600 font-bold italic mb-1 leading-tight">↳ Item: ${i.note}</p>`;
+                            html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-slate-50"><span>${i.name}</span><span>x${i.qty}</span></div>`;
+                            if(i.note) html += `<p class="text-[10px] text-red-600 italic mb-1 leading-tight">↳ ${i.note}</p>`;
                         });
-                        if(vData[slot].note) html += `<div class="mt-2 p-2 bg-red-100 border border-red-200 rounded-lg"><p class="text-[9px] text-red-700 font-black uppercase tracking-tighter mb-1">⚠️ Delivery Note:</p><p class="text-[11px] text-red-800 font-bold italic">${vData[slot].note}</p></div>`;
+                        if(vData[slot].note) html += `<div class="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-800 font-bold italic">⚠️ ${vData[slot].note}</div>`;
                         html += `</div>`;
                     }
                 });
@@ -326,10 +316,27 @@ window.generateConsolidatedReport = async function() {
             }
         });
         res.innerHTML = html || `<p class="text-center p-10 text-slate-400 font-bold">No orders found.</p>`;
-    } catch (e) { res.innerHTML = "Error loading list."; console.error(e); }
+    } catch (e) { console.error(e); }
 };
 
-// --- STANDING ORDER LOGIC ---
+window.editVenueOrder = function(venueId, dateStr, slot) {
+    window.currentUser.venue = venueId;
+    document.getElementById('delivery-date').value = dateStr;
+    document.getElementById('delivery-slot').value = slot;
+    document.getElementById('welcome-msg').innerHTML = `${venueId} <button onclick="resetToKitchen()" class="ml-2 bg-red-600 text-white px-2 py-1 rounded text-[8px]">Exit Override</button>`;
+    window.switchTab('daily');
+    loadProducts();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.resetToKitchen = function() {
+    window.currentUser.venue = originalKitchenVenue;
+    document.getElementById('welcome-msg').innerText = originalKitchenVenue;
+    setTomorrowDate();
+    loadProducts();
+};
+
+// --- STANDING ORDERS ---
 async function loadStandingOrders() {
     const { data } = await _supabase.from('standing_orders').select('*');
     allStandingOrders = data || [];
@@ -363,7 +370,7 @@ window.addStandingOrder = async function() {
     const item = document.getElementById('standing-item').value, slot = document.getElementById('standing-slot').value, qtyInput = document.getElementById('standing-qty'), qty = parseInt(qtyInput.value);
     const days = Array.from(document.querySelectorAll('.day-active')).map(b => b.dataset.day);
     if (!item || isNaN(qty) || days.length === 0) return alert("Fill all info.");
-    const { error } = await _supabase.from('standing_orders').insert([{ venue_id: currentUser.venue, item_name: item, quantity: qty, delivery_slot: slot, days_of_week: days.join(', ') }]);
+    const { error } = await _supabase.from('standing_orders').insert([{ venue_id: window.currentUser.venue, item_name: item, quantity: qty, delivery_slot: slot, days_of_week: days.join(', ') }]);
     if(!error) { alert("Added!"); qtyInput.value = ""; document.querySelectorAll('.day-active').forEach(b => b.classList.remove('day-active')); loadStandingOrders(); }
 };
 window.deleteStanding = async function(id) { if(confirm("Remove?")) { await _supabase.from('standing_orders').delete().eq('id', id); loadStandingOrders(); } };
