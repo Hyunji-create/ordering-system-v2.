@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BOH Master Portal</title>
+    <title>Kitchen Order Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-slate-100 min-h-screen p-4 pb-20 font-sans text-slate-900">
 
     <div id="login-card" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-2xl shadow-xl border border-slate-200 text-center">
-        <h1 class="text-2xl font-bold text-slate-800 mb-2 font-serif tracking-tight">BOH Master Portal</h1>
+        <h1 class="text-2xl font-bold text-slate-800 mb-2 font-serif tracking-tight uppercase">Kitchen Order Portal</h1>
         <p class="text-slate-500 mb-8 text-[10px] tracking-widest uppercase font-bold text-blue-600">Internal Operations</p>
         <div class="space-y-4">
             <input id="username" type="text" placeholder="User ID" class="w-full p-4 border rounded-xl uppercase outline-none focus:ring-2 focus:ring-blue-600 shadow-sm text-center">
@@ -22,21 +22,21 @@
     <div id="dashboard" class="hidden max-w-2xl mx-auto space-y-6">
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center sticky top-0 z-10">
             <div class="text-left">
-                <h1 id="welcome-msg" class="text-xl font-bold text-slate-800 uppercase italic leading-none">Venue</h1>
-                <p id="user-role-display" class="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-1"></p>
+                <h1 id="welcome-msg" class="text-xl font-bold text-slate-800 uppercase italic leading-none text-blue-900">Venue</h1>
+                <p id="user-role-display" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1"></p>
             </div>
             <button onclick="location.reload()" class="bg-slate-50 px-4 py-2 rounded-lg text-red-500 text-[10px] font-black border border-slate-100 uppercase hover:bg-red-50">Logout</button>
         </div>
 
         <div id="kitchen-admin-section" class="hidden space-y-4">
-            <div class="bg-blue-900 text-white p-6 rounded-2xl shadow-lg text-left">
-                <h2 class="text-xs font-black uppercase tracking-widest mb-4 opacity-70">Kitchen Command Center</h2>
+            <div class="bg-slate-800 text-white p-6 rounded-2xl shadow-lg text-left border-b-4 border-blue-500">
+                <h2 class="text-sm font-black uppercase tracking-widest mb-4">Kitchen Command Center</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input id="admin-view-date" type="date" class="p-3 rounded-lg text-slate-900 text-sm font-bold w-full">
-                    <button onclick="generateConsolidatedReport()" class="bg-white text-blue-900 font-bold p-3 rounded-lg text-xs uppercase hover:bg-blue-50">Generate Master List</button>
+                    <button onclick="generateConsolidatedReport()" class="bg-blue-600 text-white font-bold p-3 rounded-lg text-xs uppercase hover:bg-blue-700 transition-colors">Generate Master List</button>
                 </div>
             </div>
-            <div id="consolidated-results" class="hidden bg-white p-6 rounded-2xl border-2 border-blue-900 shadow-sm text-left"></div>
+            <div id="consolidated-results" class="hidden bg-white p-6 rounded-2xl border-2 border-slate-800 shadow-sm text-left"></div>
         </div>
 
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
@@ -73,7 +73,7 @@
                 </div>
 
                 <div class="flex space-x-2">
-                    <button onclick="loadStandingOrder()" class="flex-1 bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-[10px] uppercase tracking-widest hover:bg-slate-300 transition-colors">Load Standing</button>
+                    <button onclick="loadStandingOrder()" class="flex-1 bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-[10px] uppercase tracking-widest hover:bg-slate-300">Load Standing</button>
                     <button id="submit-btn-main" onclick="submitOrder()" class="flex-[2] bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition-all uppercase tracking-widest text-xs">Submit Order</button>
                 </div>
             </div>
@@ -115,7 +115,6 @@
 
         window.onload = function() {
             setTomorrowDate();
-            // We no longer attach onclicks here to avoid the "null" error
         };
 
         function handleLogin() {
@@ -129,41 +128,30 @@
                 document.getElementById('dashboard').classList.remove('hidden');
                 document.getElementById('welcome-msg').innerText = "Venue: " + found.venue;
                 document.getElementById('user-role-display').innerText = (found.role === 'kitchen' ? 'KITCHEN' : 'VENUE') + " ACCESS";
-                
-                if (found.role === 'kitchen') {
-                    document.getElementById('kitchen-admin-section').classList.remove('hidden');
-                }
-                
+                if (found.role === 'kitchen') document.getElementById('kitchen-admin-section').classList.remove('hidden');
                 loadProducts();
                 loadHistory();
-            } else {
-                alert("Login Failed. Check User ID and Password.");
-            }
+            } else { alert("Login Failed"); }
         }
 
         async function loadProducts() {
             const supplier = document.getElementById('supplier-select').value;
             const container = document.getElementById('product-list');
-            container.innerHTML = `<p class="p-10 text-xs animate-pulse text-center font-bold text-slate-400">SYNCING INVENTORY...</p>`;
-
-            const { data, error } = await _supabase.from('products').select('*').eq('supplier', supplier);
-            
+            container.innerHTML = `<p class="p-10 text-xs animate-pulse text-center font-bold text-slate-400 uppercase">Syncing Items...</p>`;
+            const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
             if (data) {
                 activeProducts = data;
                 container.innerHTML = "";
                 data.forEach(prod => {
-                    if (prod.restricted_to) {
-                        const allowed = prod.restricted_to.split(',').map(v=>v.trim());
-                        if (!allowed.includes(currentUser.venue)) return;
-                    }
+                    if (prod.restricted_to && !prod.restricted_to.split(',').map(v=>v.trim()).includes(currentUser.venue)) return;
                     const div = document.createElement('div');
-                    div.className = "flex items-center justify-between p-3 border-b border-slate-50 hover:bg-slate-50 transition-colors";
+                    div.className = "flex items-center justify-between p-3 border-b border-slate-50 hover:bg-slate-50";
                     div.innerHTML = `
                         <div class="text-left">
                             <p class="text-[13px] font-bold text-slate-800 uppercase leading-none">${prod.name}</p>
-                            <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">${prod.unit} ${prod.lead_time > 1 ? `<span class="text-orange-600">(${prod.lead_time}d Lead)</span>` : ''}</p>
+                            <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">${prod.unit} ${prod.lead_time > 1 ? `<span class="text-orange-600">(${prod.lead_time}d)</span>` : ''}</p>
                         </div>
-                        <input type="number" id="qty-${prod.id}" data-pid="${prod.id}" data-name="${prod.name}" data-unit="${prod.unit}" min="0" placeholder="0" class="w-14 p-2 bg-white border border-slate-200 rounded-lg text-center font-bold text-blue-600 outline-none focus:ring-1 focus:ring-blue-500">
+                        <input type="number" id="qty-${prod.id}" data-pid="${prod.id}" data-name="${prod.name}" data-unit="${prod.unit}" min="0" placeholder="0" class="w-14 p-2 bg-white border border-slate-200 rounded-lg text-center font-bold text-blue-600 outline-none">
                     `;
                     container.appendChild(div);
                 });
@@ -172,18 +160,15 @@
 
         async function submitOrder() {
             const dateStr = document.getElementById('delivery-date').value;
-            if (!dateStr) return alert("Please select a date.");
-
+            if (!dateStr) return alert("Select Date");
             const now = new Date();
             const selectedDate = new Date(dateStr);
             selectedDate.setHours(0,0,0,0);
             const today = new Date(); today.setHours(0,0,0,0);
             const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-
             const isKitchen = (currentUser.role === 'kitchen');
-
-            if (selectedDate <= today && !isKitchen) return alert("Too late for today's delivery.");
-            if (selectedDate.getTime() === tomorrow.getTime() && now.getHours() >= 13 && !isKitchen) return alert("Past 1PM cutoff for tomorrow.");
+            if (selectedDate <= today && !isKitchen) return alert("Too late for today.");
+            if (selectedDate.getTime() === tomorrow.getTime() && now.getHours() >= 13 && !isKitchen) return alert("Past 1PM cutoff.");
 
             const orderItems = [];
             const inputs = document.querySelectorAll('#product-list input');
@@ -196,17 +181,13 @@
                     if (p && !isKitchen) {
                         const minDate = new Date(today);
                         minDate.setDate(today.getDate() + (p.lead_time || 1));
-                        if (selectedDate < minDate) {
-                            alert(`LEAD TIME ERROR: ${p.name} needs ${p.lead_time} days.`);
-                            ltViolation = true;
-                        }
+                        if (selectedDate < minDate) { alert(`LEAD ERROR: ${p.name}`); ltViolation = true; }
                     }
                     orderItems.push({ name: el.dataset.name, quantity: q, unit: el.dataset.unit });
                 }
             });
 
-            if (ltViolation) return;
-            if (orderItems.length === 0) return alert("Add items to your order first.");
+            if (ltViolation || orderItems.length === 0) return;
 
             const { error } = await _supabase.from('orders').insert([{
                 venue_id: currentUser.venue,
@@ -218,62 +199,50 @@
 
             if (document.getElementById('save-standing-order').checked) {
                 localStorage.setItem(`standing_${currentUser.venue}`, JSON.stringify(orderItems));
-                alert("Standing Order Saved Locally!");
+                alert("Standing Order Saved!");
             }
 
-            if (!error) { 
-                alert("ORDER SENT SUCCESS!"); 
-                loadHistory(); 
-                inputs.forEach(i => i.value = ""); 
-                document.getElementById('order-comment').value = "";
-            } else {
-                alert("Error: " + error.message);
-            }
+            if (!error) { alert("ORDER SENT SUCCESS!"); loadHistory(); inputs.forEach(i => i.value = ""); document.getElementById('order-comment').value = ""; }
         }
 
         function loadStandingOrder() {
             const raw = localStorage.getItem(`standing_${currentUser.venue}`);
-            if (!raw) return alert("No standing order found on this device.");
+            if (!raw) return alert("No standing order saved.");
             const items = JSON.parse(raw);
             items.forEach(item => {
                 const inputs = document.querySelectorAll('#product-list input');
-                inputs.forEach(inp => {
-                    if (inp.dataset.name === item.name) inp.value = item.quantity;
-                });
+                inputs.forEach(inp => { if (inp.dataset.name === item.name) inp.value = item.quantity; });
             });
-            alert("Quantities loaded!");
+            alert("Standing order quantities loaded!");
         }
 
         async function generateConsolidatedReport() {
             const date = document.getElementById('admin-view-date').value;
             const container = document.getElementById('consolidated-results');
-            container.innerHTML = "<p class='animate-pulse text-center p-10 font-bold'>Processing Master List...</p>";
+            container.innerHTML = "<p class='animate-pulse text-center p-10 font-bold uppercase'>Processing Master List...</p>";
             container.classList.remove('hidden');
 
             const { data } = await _supabase.from('orders').select('*').eq('delivery_date', date);
-            
             if (!data || data.length === 0) {
-                container.innerHTML = "<p class='text-red-500 font-bold p-10 text-center uppercase'>No orders found for this date.</p>";
+                container.innerHTML = "<p class='text-red-500 font-bold p-10 text-center uppercase'>No orders for this date.</p>";
                 return;
             }
 
             const totals = {};
-            data.forEach(o => {
-                o.items.forEach(i => {
-                    const key = `${i.name} (${i.unit})`;
-                    totals[key] = (totals[key] || 0) + i.quantity;
-                });
-            });
+            data.forEach(o => { o.items.forEach(i => {
+                const key = `${i.name} (${i.unit})`;
+                totals[key] = (totals[key] || 0) + i.quantity;
+            });});
 
-            let html = `<div class="flex justify-between items-center mb-4 border-b pb-2"><h3 class="text-blue-900 font-black text-xs uppercase tracking-widest">1. TOTAL PICK LIST</h3><button onclick="window.print()" class="text-[10px] bg-slate-100 px-2 py-1 rounded font-bold uppercase">Print List</button></div><ul class="space-y-1 mb-8">`;
+            let html = `<div class="flex justify-between items-center mb-4 border-b pb-2"><h3 class="text-slate-800 font-black text-xs uppercase tracking-widest">1. TOTAL PICK LIST</h3><button onclick="window.print()" class="text-[10px] bg-slate-100 px-2 py-1 rounded font-bold uppercase">Print</button></div><ul class="space-y-1 mb-8">`;
             for (const [name, qty] of Object.entries(totals)) {
-                html += `<li class="flex justify-between border-b border-slate-50 py-1 font-bold text-sm"><span>${name}</span> <span class="text-blue-600">x${qty}</span></li>`;
+                html += `<li class="flex justify-between border-b border-slate-50 py-1 font-bold text-sm"><span>${name}</span> <span class="text-blue-600 font-black">x${qty}</span></li>`;
             }
-            html += `</ul><h3 class="text-blue-900 font-black text-xs uppercase mb-4 border-b pb-2 tracking-widest">2. ORDERS BY VENUE</h3>`;
+            html += `</ul><h3 class="text-slate-800 font-black text-xs uppercase mb-4 border-b pb-2 tracking-widest">2. ORDERS BY VENUE</h3>`;
             
             data.forEach(o => {
                 html += `
-                    <div class="mb-6 bg-white p-4 rounded-xl border-2 border-slate-50 shadow-sm">
+                    <div class="mb-6 bg-white p-4 rounded-xl border-2 border-slate-100">
                         <div class="flex justify-between mb-3 font-black text-blue-700 uppercase tracking-tighter italic border-b pb-1">
                             <span>${o.venue_id}</span> 
                             <span class="text-[9px] text-slate-400">${o.delivery_slot}</span>
@@ -282,11 +251,11 @@
                             ${o.items.map(i => `
                                 <li class="flex justify-between text-xs font-semibold text-slate-700 border-b border-slate-50 py-1 last:border-0">
                                     <span>${i.name}</span>
-                                    <span class="text-blue-500">x${i.quantity} ${i.unit}</span>
+                                    <span class="text-blue-600 font-black">x${i.quantity}</span>
                                 </li>
                             `).join('')}
                         </ul>
-                        ${o.comment ? `<div class="mt-3 text-[10px] bg-red-50 p-2 rounded text-red-600 font-bold border border-red-100 italic uppercase tracking-tight">Note: ${o.comment}</div>` : ''}
+                        ${o.comment ? `<div class="mt-3 text-[10px] bg-red-50 p-2 rounded text-red-600 font-bold border border-red-100 italic uppercase">Note: ${o.comment}</div>` : ''}
                     </div>
                 `;
             });
@@ -303,8 +272,8 @@
                             <span class="text-blue-600">${o.venue_id}</span>
                             <span class="text-slate-400">DEL: ${o.delivery_date}</span>
                         </div>
-                        <div class="text-slate-800 italic leading-tight text-left">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</div>
-                        ${o.comment ? `<div class="mt-2 text-red-600 font-bold border-t pt-1 italic text-[10px] uppercase tracking-tighter">REQ: ${o.comment}</div>` : ''}
+                        <div class="text-slate-800 italic leading-tight">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</div>
+                        ${o.comment ? `<div class="mt-2 text-red-600 font-bold border-t pt-1 italic text-[10px] uppercase">REQ: ${o.comment}</div>` : ''}
                     </div>
                 `).join('');
             }
