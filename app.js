@@ -139,7 +139,6 @@ window.addStandingOrder = async function() {
 };
 
 window.deleteStanding = async function(id) { if(confirm("Remove?")) { await _supabase.from('standing_orders').delete().eq('id', id); loadStandingOrders(); } };
-
 window.toggleDay = function(btn) { btn.classList.toggle('day-active'); };
 
 // DAILY ORDER LOGIC
@@ -235,9 +234,7 @@ window.submitOrder = async function() {
 
     const payload = { venue_id: currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items };
     let res = currentDBOrder ? await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id) : await _supabase.from('orders').insert([payload]);
-
     if (!res.error) { alert("Sent to Kitchen!"); applyStandingToDaily(); }
-    else { alert("Error: " + res.error.message); }
 };
 
 // CONSOLIDATED REPORT
@@ -254,27 +251,30 @@ window.generateConsolidatedReport = async function() {
         
         const venueReport = {};
         const VENUES = ["WYN", "MCC", "WSQ", "DSQ", "GJ"];
-        VENUES.forEach(v => venueReport[v] = { "1st Delivery": [], "2nd Delivery": [] });
+        VENUES.forEach(v => { venueReport[v] = { "1st Delivery": [], "2nd Delivery": [] }; });
 
         (standings || []).forEach(s => {
             if(s.days_of_week && s.days_of_week.includes(targetDay)) {
-                if(venueReport[s.venue_id]) venueReport[s.venue_id][s.delivery_slot].push({ name: s.item_name, qty: s.quantity });
+                // IMPORTANT: Create the slot if it doesn't exist for extra safety
+                if(!venueReport[s.venue_id]) venueReport[s.venue_id] = { "1st Delivery": [], "2nd Delivery": [] };
+                venueReport[s.venue_id][s.delivery_slot].push({ name: s.item_name, qty: s.quantity });
             }
         });
 
         (oneOffs || []).forEach(o => {
-            if(venueReport[o.venue_id]) {
-                venueReport[o.venue_id][o.delivery_slot] = o.items.map(i => ({ name: i.name, qty: i.quantity, note: i.comment || "" }));
-            }
+            if(!venueReport[o.venue_id]) venueReport[o.venue_id] = { "1st Delivery": [], "2nd Delivery": [] };
+            venueReport[o.venue_id][o.delivery_slot] = o.items.map(i => ({ name: i.name, qty: i.quantity, note: i.comment || "" }));
         });
 
         let html = `<div class="flex justify-between border-b pb-2 mb-4 uppercase text-[10px] font-black text-blue-900"><span>Loading Plan (${dateStr})</span><button onclick="window.print()" class="underline">Print</button></div>`;
         
-        VENUES.forEach(v => {
+        // Use all keys in the report to ensure we don't miss "Other" venues
+        const allVenues = Object.keys(venueReport).sort();
+        allVenues.forEach(v => {
             const vData = venueReport[v];
             const hasOrders = vData["1st Delivery"].length > 0 || vData["2nd Delivery"].length > 0;
             if(hasOrders) {
-                html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-slate-50 text-left border-slate-100 shadow-inner"><h3 class="font-black text-blue-800 text-lg border-b pb-1 mb-3 italic">${v}</h3>`;
+                html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-slate-50 text-left border-slate-100"><h3 class="font-black text-blue-800 text-lg border-b pb-1 mb-3 italic">${v}</h3>`;
                 ["1st Delivery", "2nd Delivery"].forEach(slot => {
                     const items = vData[slot].filter(i => i.qty > 0).sort(sortItemsByCustomOrder);
                     if(items.length > 0) {
@@ -291,7 +291,7 @@ window.generateConsolidatedReport = async function() {
         });
         res.innerHTML = html || `<p class="text-center p-10 text-slate-400 font-bold">No orders for this date.</p>`;
     } catch (e) {
-        res.innerHTML = "Error loading list. Check connection.";
+        res.innerHTML = "Error loading list. Check console.";
         console.error(e);
     }
 };
