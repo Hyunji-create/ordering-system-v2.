@@ -71,7 +71,7 @@
     <div id="dashboard" class="hidden max-w-2xl mx-auto space-y-4">
         <div class="bg-white p-5 rounded-3xl shadow-sm flex justify-between items-center border-b-4 border-blue-600">
             <div class="text-left">
-                <h1 id="welcome-msg" class="text-2xl font-black text-blue-900 uppercase italic">VENUE</h1>
+                <h1 id="welcome-msg" class="text-2xl font-black text-blue-900 uppercase italic leading-none">VENUE</h1>
                 <p id="user-role-display" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1"></p>
             </div>
             <button onclick="location.reload()" class="bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-bold border uppercase">Logout</button>
@@ -84,10 +84,10 @@
 
         <div id="view-daily" class="space-y-4">
             <div id="kitchen-admin-section" class="bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
-                <p class="text-[10px] font-black uppercase mb-4 text-blue-400 tracking-widest">Order Summary</p>
+                <p class="text-[10px] font-black uppercase mb-4 text-blue-400 tracking-widest text-center">Master Order Summary</p>
                 <div class="flex gap-2">
                     <input id="admin-view-date" type="date" class="flex-1 p-3 rounded-xl text-slate-900 font-bold">
-                    <button onclick="generateConsolidatedReport()" class="bg-blue-600 px-6 py-3 rounded-xl font-black text-[10px] uppercase">View List</button>
+                    <button onclick="generateConsolidatedReport()" class="bg-blue-600 px-6 py-3 rounded-xl font-black text-[10px] uppercase">View All Venue Orders</button>
                 </div>
                 <div id="consolidated-results" class="hidden mt-4 bg-white text-slate-900 p-6 rounded-2xl max-h-[500px] overflow-auto text-left shadow-inner"></div>
             </div>
@@ -142,7 +142,7 @@
         </div>
 
         <div class="bg-white p-6 rounded-3xl shadow-md border border-slate-100">
-            <p class="text-[10px] font-black text-slate-300 uppercase tracking-widest border-b pb-2 mb-4">Activity Log</p>
+            <p class="text-[10px] font-black text-slate-300 uppercase tracking-widest border-b pb-2 mb-4">My Order Activity</p>
             <div id="history-container" class="space-y-2 text-left"></div>
         </div>
     </div>
@@ -157,24 +157,25 @@
         }
 
         async function updateComment(orderId) {
-            const newComment = prompt("Add a note for the kitchen (e.g. 'Need extra ice'):");
+            const newComment = prompt("Update note for kitchen:");
             if (newComment !== null) {
                 const { error } = await _supabase.from('orders').update({ comment: newComment }).eq('id', orderId);
-                if (!error) { alert("Note Attached!"); loadHistory(); }
+                if (!error) { alert("Note Updated!"); loadHistory(); }
             }
         }
 
         async function editOrder(orderId) {
             const { data } = await _supabase.from('orders').select('*').eq('id', orderId).single();
             if (data) {
+                if(data.venue_id !== currentUser.venue) return alert("Unauthorized access.");
                 editingOrderId = orderId;
                 switchTab('daily');
                 document.getElementById('edit-indicator').classList.remove('hidden');
-                document.getElementById('submit-btn-text').innerText = "Update Existing Order";
+                document.getElementById('submit-btn-text').innerText = "Update Order";
                 document.getElementById('delivery-date').value = data.delivery_date;
                 document.getElementById('delivery-slot').value = data.delivery_slot;
                 document.getElementById('order-comment').value = data.comment || "";
-                document.querySelectorAll('#product-list input').forEach(inp => inp.value = "");
+                document.querySelectorAll('#product-list input').forEach(inp => inp.value = "0");
                 data.items.forEach(item => {
                     const input = Array.from(document.querySelectorAll('#product-list input')).find(i => i.dataset.name === item.name);
                     if (input) input.value = item.quantity;
@@ -186,92 +187,138 @@
         async function submitOrder() {
             const dateStr = document.getElementById('delivery-date').value;
             const items = [];
+            // Changed: Allow 0 to be saved to overwrite existing values
             document.querySelectorAll('#product-list input').forEach(el => {
-                const q = parseInt(el.value) || 0;
-                if(q > 0) items.push({ name: el.dataset.name, quantity: q, unit: el.dataset.unit });
+                const q = parseInt(el.value);
+                if(!isNaN(q)) items.push({ name: el.dataset.name, quantity: q, unit: el.dataset.unit });
             });
-            if(items.length === 0) return alert("Enter quantities.");
-            const payload = { venue_id: currentUser.venue, delivery_date: dateStr, delivery_slot: document.getElementById('delivery-slot').value, items: items, comment: document.getElementById('order-comment').value };
+            
+            // Check if there is at least something to send
+            const totalQty = items.reduce((sum, i) => sum + i.quantity, 0);
+            if(items.length === 0 || (editingOrderId === null && totalQty === 0)) return alert("Please enter quantities.");
+
+            const payload = { 
+                venue_id: currentUser.venue, 
+                delivery_date: dateStr, 
+                delivery_slot: document.getElementById('delivery-slot').value, 
+                items: items, 
+                comment: document.getElementById('order-comment').value 
+            };
+
             let res;
             if (editingOrderId) res = await _supabase.from('orders').update(payload).eq('id', editingOrderId);
             else res = await _supabase.from('orders').insert([payload]);
+            
             if (!res.error) {
-                alert("Saved!");
+                alert("Order Saved!");
                 editingOrderId = null;
                 document.getElementById('edit-indicator').classList.add('hidden');
                 document.getElementById('submit-btn-text').innerText = "Submit Order";
                 loadHistory();
                 document.querySelectorAll('#product-list input').forEach(i=>i.value="");
-            }
+                document.getElementById('order-comment').value = "";
+            } else { alert("Error: " + res.error.message); }
         }
 
         async function generateConsolidatedReport() {
             const dateStr = document.getElementById('admin-view-date').value;
             const d = new Date(dateStr + "T00:00:00");
-            const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
+            const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            const targetDay = dayNames[d.getDay()];
             const res = document.getElementById('consolidated-results');
-            res.innerHTML = "CALCULATING..."; res.classList.remove('hidden');
+            res.innerHTML = "LOADING MASTER VIEW..."; res.classList.remove('hidden');
 
             const { data: oneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', dateStr);
             const { data: standings } = await _supabase.from('standing_orders').select('*');
-            const relevant = (standings || []).filter(s => s.days_of_week.includes(targetDay));
-
-            const finalData = { "1st Delivery": {}, "2nd Delivery": {} };
-            const venueNotes = [];
-
-            relevant.forEach(s => {
-                finalData[s.delivery_slot][s.item_name] = (finalData[s.delivery_slot][s.item_name] || 0) + s.quantity;
-            });
-            (oneOffs || []).forEach(o => {
-                o.items.forEach(i => finalData[o.delivery_slot][i.name] = (finalData[o.delivery_slot][i.name] || 0) + i.quantity);
-                if(o.comment) venueNotes.push({ venue: o.venue_id, slot: o.delivery_slot, note: o.comment });
-            });
-
-            let html = `<div class="flex justify-between border-b pb-2 mb-4 uppercase text-[10px] font-black text-blue-900"><span>Summary (${dateStr})</span><button onclick="window.print()" class="underline">Print</button></div>`;
             
-            ["1st Delivery", "2nd Delivery"].forEach(slot => {
-                html += `<div class="mb-6"><h4 class="text-xs font-black text-slate-800 uppercase bg-slate-100 p-2 rounded mb-2">${slot} Totals</h4>`;
-                const sorted = Object.entries(finalData[slot]).map(([name, qty]) => ({name, qty})).sort(sortItemsByCustomOrder);
-                if (sorted.length > 0) {
-                    sorted.forEach(item => html += `<div class="flex justify-between py-1.5 border-b text-sm font-bold"><span>${item.name}</span><span class="text-blue-600">x${item.qty}</span></div>`);
-                } else { html += `<p class="text-[10px] italic text-slate-400">No items</p>`; }
-                html += `</div>`;
+            // Organize data by Venue first
+            const venueReport = {};
+            const VENUES = ["WYN", "MCC", "WSQ", "DSQ", "GJ"];
+
+            VENUES.forEach(v => {
+                venueReport[v] = { "1st Delivery": [], "2nd Delivery": [], note: "" };
             });
 
-            if(venueNotes.length > 0) {
-                html += `<div class="mt-4 p-4 bg-red-50 rounded-2xl border-2 border-red-100"><h4 class="text-[10px] font-black uppercase text-red-600 mb-2">Venue Notes</h4>`;
-                venueNotes.forEach(n => html += `<p class="text-xs font-bold mb-1"><span class="text-red-800">${n.venue} (${n.slot}):</span> ${n.note}</p>`);
-                html += `</div>`;
-            }
-            res.innerHTML = html;
+            // Add Standing Orders
+            (standings || []).forEach(s => {
+                if(s.days_of_week.includes(targetDay)) {
+                    if(venueReport[s.venue_id]) {
+                        venueReport[s.venue_id][s.delivery_slot].push({ name: s.item_name, qty: s.quantity, type: 'STND' });
+                    }
+                }
+            });
+
+            // Add Daily Orders (Overwrites or adds to list)
+            (oneOffs || []).forEach(o => {
+                if(venueReport[o.venue_id]) {
+                    // Daily orders are considered the "Final Word" for that specific slot
+                    venueReport[o.venue_id][o.delivery_slot] = o.items.map(i => ({ name: i.name, qty: i.quantity, type: 'DAILY' }));
+                    if(o.comment) venueReport[o.venue_id].note = o.comment;
+                }
+            });
+
+            let html = `<div class="flex justify-between border-b pb-2 mb-4 uppercase text-[10px] font-black text-blue-900"><span>Loading Plan (${dateStr})</span><button onclick="window.print()" class="underline">Print</button></div>`;
+            
+            VENUES.forEach(v => {
+                const vData = venueReport[v];
+                const hasOrders = vData["1st Delivery"].length > 0 || vData["2nd Delivery"].length > 0;
+                
+                if(hasOrders) {
+                    html += `<div class="mb-6 p-4 border-2 rounded-2xl bg-slate-50 border-slate-100">
+                                <h3 class="font-black text-blue-800 text-lg border-b pb-1 mb-3 uppercase italic">${v}</h3>`;
+                    
+                    ["1st Delivery", "2nd Delivery"].forEach(slot => {
+                        const items = vData[slot].filter(i => i.qty > 0).sort(sortItemsByCustomOrder);
+                        if(items.length > 0) {
+                            html += `<div class="mb-3">
+                                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest border-l-4 border-blue-400 pl-2 mb-2">${slot}</p>`;
+                            items.forEach(i => {
+                                html += `<div class="flex justify-between py-1 text-sm font-bold border-b border-white">
+                                            <span>${i.name}</span><span class="text-blue-600">x${i.qty}</span>
+                                         </div>`;
+                            });
+                            html += `</div>`;
+                        }
+                    });
+
+                    if(vData.note) {
+                        html += `<div class="mt-2 p-2 bg-red-100 text-red-700 rounded-lg text-xs font-bold uppercase italic">Note: ${vData.note}</div>`;
+                    }
+                    html += `</div>`;
+                }
+            });
+
+            res.innerHTML = html || `<p class="text-center p-10 text-slate-400">No orders scheduled for this date.</p>`;
         }
 
         async function loadHistory() {
-            const { data } = await _supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(10);
+            // Updated: Only fetch current user's venue data
+            const { data } = await _supabase.from('orders')
+                .select('*')
+                .eq('venue_id', currentUser.venue)
+                .order('created_at', { ascending: false })
+                .limit(15);
+
             if(data) document.getElementById('history-container').innerHTML = data.map(o => {
-                const isMine = o.venue_id === currentUser.venue;
                 const now = new Date();
                 const orderDate = new Date(o.delivery_date + "T00:00:00");
                 const today = new Date(); today.setHours(0,0,0,0);
-                
-                // FIXED EDIT LOGIC:
-                // 1. If order is for Tomorrow or later: Show Edit.
-                // 2. If order is for Today AND it is before 1pm: Show Edit.
-                let canEdit = isMine && (orderDate > today || (orderDate.getTime() === today.getTime() && now.getHours() < 13));
+                let canEdit = (orderDate > today || (orderDate.getTime() === today.getTime() && now.getHours() < 13));
 
                 return `
-                <div class="p-4 bg-slate-50 rounded-2xl border mb-2 shadow-sm">
-                    <div class="flex justify-between mb-1 uppercase text-blue-600 font-black text-[10px]"><span>${o.venue_id}</span><span>${o.delivery_date}</span></div>
-                    <p class="text-slate-800 text-xs font-bold">${o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</p>
+                <div class="p-4 bg-slate-50 rounded-2xl border mb-2 shadow-sm border-slate-100">
+                    <div class="flex justify-between mb-1 uppercase text-blue-600 font-black text-[10px]"><span>${o.delivery_slot}</span><span>${o.delivery_date}</span></div>
+                    <p class="text-slate-800 text-xs font-bold">${o.items.filter(i => i.quantity > 0).map(i => `${i.name} (x${i.quantity})`).join(', ')}</p>
                     ${o.comment ? `<p class="mt-2 text-[10px] text-red-600 italic font-bold">NOTE: ${o.comment}</p>` : ''}
                     <div class="flex gap-2 mt-3">
                         ${canEdit ? `<button onclick="editOrder(${o.id})" class="flex-1 bg-orange-500 text-white py-2 rounded-xl uppercase text-[9px] font-black">Edit Order</button>` : ''}
-                        ${isMine ? `<button onclick="updateComment(${o.id})" class="flex-1 bg-slate-700 text-white py-2 rounded-xl uppercase text-[9px] font-black">Add Note</button>` : ''}
+                        <button onclick="updateComment(${o.id})" class="flex-1 bg-slate-700 text-white py-2 rounded-xl uppercase text-[9px] font-black">Update Note</button>
                     </div>
                 </div>`;
             }).join('');
         }
 
+        // Supporting UI functions
         function setTomorrowDate() {
             const tom = new Date(); tom.setDate(tom.getDate() + 1);
             const iso = tom.toISOString().split('T')[0];
@@ -356,7 +403,7 @@
             const targetDay = dayNames[d.getDay()];
             const matches = allStandingOrders.filter(s => s.days_of_week.includes(targetDay) && s.delivery_slot === selectedSlot);
             if (matches.length === 0) return alert("No standing orders found.");
-            document.querySelectorAll('#product-list input').forEach(inp => inp.value = "");
+            document.querySelectorAll('#product-list input').forEach(inp => inp.value = "0");
             matches.forEach(s => {
                 const input = Array.from(document.querySelectorAll('#product-list input')).find(i => i.dataset.name === s.item_name);
                 if (input) input.value = s.quantity;
