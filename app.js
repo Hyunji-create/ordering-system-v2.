@@ -259,24 +259,55 @@ window.validateChanges = function() {
 window.submitOrder = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
-    const items = [];
+    const currentSupplier = document.getElementById('supplier-select').value;
+    
+    // 1. Get the items currently on the screen (the ones being adjusted)
+    const itemsOnScreen = [];
     document.querySelectorAll('#product-list .item-row').forEach(row => {
         const inp = row.querySelector('input[type="number"]');
-        items.push({ name: inp.dataset.name, quantity: parseInt(inp.value) || 0, comment: row.querySelector('.note-input').value });
+        if(inp) {
+            itemsOnScreen.push({ 
+                name: inp.dataset.name, 
+                quantity: parseInt(inp.value) || 0, 
+                comment: row.querySelector('.note-input').value 
+            });
+        }
     });
+
+    // 2. Prepare the final item list
+    let finalItems = [];
+
+    if (currentDBOrder && currentDBOrder.items) {
+        // MERGE LOGIC: Start with all existing items from the database
+        // Remove any items that match the supplier currently on screen (we will replace them)
+        const otherSupplierItems = currentDBOrder.items.filter(existingItem => 
+            !itemsOnScreen.some(screenItem => screenItem.name === existingItem.name)
+        );
+        
+        // Combine the "untouched" items with the "newly adjusted" items
+        finalItems = [...otherSupplierItems, ...itemsOnScreen];
+    } else {
+        // No existing order, just use what's on screen
+        finalItems = itemsOnScreen;
+    }
     
-    // VITAL FIX: Force the payload to use the acting venue
     const payload = { 
         venue_id: window.currentUser.venue, 
         delivery_date: dateStr, 
         delivery_slot: slot, 
-        items: items, 
+        items: finalItems, 
         comment: document.getElementById('order-comment').value 
     };
 
-    let res = currentDBOrder ? await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id) : await _supabase.from('orders').insert([payload]);
+    let res;
+    if (currentDBOrder) {
+        res = await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id);
+    } else {
+        res = await _supabase.from('orders').insert([payload]);
+    }
+
     if (!res.error) { 
-        alert("Success: Quantities updated for " + window.currentUser.venue); 
+        alert("Success: Quantities updated for " + window.currentUser.venue + " (" + currentSupplier + ")"); 
         applyStandingToDaily(); 
     } else {
         alert("Error saving order: " + res.error.message);
