@@ -501,12 +501,25 @@ async function loadStandingOrders() {
 
 function renderStandingList() {
     const cont = document.getElementById('standing-items-container'); 
+    const inputArea = document.querySelector('#view-standing .bg-blue-900'); // The blue input box
     if(!cont) return;
+    
+    // 1. Determine if we are currently in "Override/Adjust" mode
+    const isOverriding = (window.currentUser.role === 'kitchen' && window.currentUser.venue !== originalKitchenVenue);
+    
+    // 2. Hide or Show the input area based on mode
+    if (inputArea) {
+        if (isOverriding) {
+            inputArea.classList.add('hidden');
+        } else {
+            inputArea.classList.remove('hidden');
+        }
+    }
+
     cont.innerHTML = "";
     
-    // LOCKED: Always use the venue they logged in with, not the override venue
+    // Always use the original kitchen venue for the list to keep it locked
     const activeVenue = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
-    
     const venueStandings = allStandingOrders.filter(s => s.venue_id === activeVenue);
     
     if (venueStandings.length === 0) {
@@ -514,6 +527,15 @@ function renderStandingList() {
         return;
     }
 
+    // 3. Add a small notice for Managers so they know why the input is gone
+    if (isOverriding) {
+        cont.innerHTML = `
+            <div class="bg-slate-100 p-4 rounded-2xl mb-4 text-[10px] font-bold text-slate-500 uppercase">
+                ℹ️ Standing Order editing is disabled while adjusting other venues.
+            </div>`;
+    }
+
+    // --- Rest of your existing Mon-Sun rendering logic ---
     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach(day => {
         const dayOrders = venueStandings.filter(s => s.days_of_week.includes(day));
         if (dayOrders.length > 0) {
@@ -526,7 +548,7 @@ function renderStandingList() {
                         dayHtml += `
                         <div class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border mb-1">
                             <div><p class="font-bold text-slate-800 text-[12px] uppercase">${s.item_name} x${s.quantity}</p></div>
-                            <button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase hover:underline p-2">Delete</button>
+                            <button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase hover:underline p-2 ${isOverriding ? 'hidden' : ''}">Delete</button>
                         </div>`;
                     });
                     dayHtml += `</div>`;
@@ -536,7 +558,6 @@ function renderStandingList() {
         }
     });
 }
-
 window.addStandingOrder = async function() {
     const item = document.getElementById('standing-item').value;
     const slot = document.getElementById('standing-slot').value;
