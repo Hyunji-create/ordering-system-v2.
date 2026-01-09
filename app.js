@@ -585,3 +585,39 @@ window.addStandingOrder = async function() {
         loadStandingOrders(); 
     }
 };
+window.exportOrdersToCSV = async function() {
+    if(!confirm("Download all order history as CSV?")) return;
+
+    const { data, error } = await _supabase
+        .from('orders')
+        .select('delivery_date, delivery_slot, venue_id, items, comment')
+        .order('delivery_date', { ascending: false });
+
+    if (error) {
+        alert("Export failed: " + error.message);
+        return;
+    }
+
+    // Convert JSON data to CSV string
+    let csvContent = "Date,Slot,Venue,Item,Qty,ItemNote,GeneralNote\n";
+    
+    data.forEach(order => {
+        order.items.forEach(item => {
+            // Remove commas from notes so they don't break the CSV columns
+            const cleanItemNote = (item.comment || "").replace(/,/g, " ");
+            const cleanGeneralNote = (order.comment || "").replace(/,/g, " ");
+            
+            csvContent += `${order.delivery_date},${order.delivery_slot},${order.venue_id},${item.name},${item.quantity},${cleanItemNote},${cleanGeneralNote}\n`;
+        });
+    });
+
+    // Create a download link and click it automatically
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Kitchen_Orders_Backup_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
