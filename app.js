@@ -357,10 +357,12 @@ window.generateConsolidatedReport = async function() {
         const { data: standings } = await _supabase.from('standing_orders').select('*');
         const { data: products } = await _supabase.from('products').select('name, supplier');
         
-        // 1. Map suppliers exactly as they are in Supabase
         const supplierMap = {};
         products.forEach(p => {
-            supplierMap[p.name] = p.supplier ? p.supplier.toUpperCase() : "GENERAL";
+            let s = p.supplier ? p.supplier.toUpperCase() : "GENERAL";
+            if (s === "DSQ") s = "DSQK"; 
+            if (s === "CK") s = "CK";
+            supplierMap[p.name] = s;
         });
 
         const venueReport = {};
@@ -368,37 +370,39 @@ window.generateConsolidatedReport = async function() {
         
         venues.forEach(v => {
             venueReport[v] = {
-                "1st Delivery": { CK: [], DSQK: [], GJ: [], note: "" },
-                "2nd Delivery": { CK: [], DSQK: [], GJ: [], note: "" }
+                "1st Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "" },
+                "2nd Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "" }
             };
         });
 
-        // 2. Process Standing Orders
         (standings || []).forEach(s => {
             if(s.days_of_week && s.days_of_week.includes(targetDay)) {
-                let supp = supplierMap[s.item_name];
-                if(venueReport[s.venue_id] && venueReport[s.venue_id][s.delivery_slot][supp]) {
-                    venueReport[s.venue_id][s.delivery_slot][supp].push({ name: s.item_name, qty: s.quantity });
+                let supp = supplierMap[s.item_name] || "GENERAL";
+                if(venueReport[s.venue_id]) {
+                    const slot = venueReport[s.venue_id][s.delivery_slot];
+                    if (slot && slot[supp]) {
+                        slot[supp].push({ name: s.item_name, qty: s.quantity });
+                    }
                 }
             }
         });
 
-        // 3. Process Manual Overrides
         (oneOffs || []).forEach(o => {
             if(venueReport[o.venue_id]) {
-                venueReport[o.venue_id][o.delivery_slot] = { CK: [], DSQK: [], GJ: [], note: o.comment || "" };
+                venueReport[o.venue_id][o.delivery_slot] = { CK: [], DSQK: [], GJ: [], GENERAL: [], note: o.comment || "" };
                 o.items.forEach(i => {
                     if (i.quantity > 0) {
-                        let supp = supplierMap[i.name];
-                        if (venueReport[o.venue_id][o.delivery_slot][supp]) {
-                            venueReport[o.venue_id][o.delivery_slot][supp].push({ name: i.name, qty: i.quantity, note: i.comment || "" });
+                        let supp = supplierMap[i.name] || "GENERAL";
+                        const slot = venueReport[o.venue_id][o.delivery_slot];
+                        if (slot) {
+                            const targetBucket = slot[supp] ? slot[supp] : slot["GENERAL"];
+                            targetBucket.push({ name: i.name, qty: i.qty || i.quantity, note: i.comment || "" });
                         }
                     }
                 });
             }
         });
 
-        // 4. HTML Generation (Simplified)
         let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black text-slate-800">
                 <span>📦 Loading Plan: ${dateStr}</span>
                 <button onclick="window.print()" class="text-blue-600 underline">Print</button>
@@ -406,9 +410,10 @@ window.generateConsolidatedReport = async function() {
 
         venues.sort().forEach(v => {
             const vData = venueReport[v];
-            const hasData = ["1st Delivery", "2nd Delivery"].some(slot => 
-                vData[slot].CK.length > 0 || vData[slot].DSQK.length > 0 || vData[slot].GJ.length > 0 || vData[slot].note
-            );
+            const hasData = ["1st Delivery", "2nd Delivery"].some(slot => {
+                const s = vData[slot];
+                return s.CK.length > 0 || s.DSQK.length > 0 || s.GJ.length > 0 || s.GENERAL.length > 0 || s.note;
+            });
 
             if (hasData) {
                 html += `<div class="mb-8 p-4 border-2 rounded-3xl bg-white shadow-sm border-slate-200">
@@ -416,25 +421,43 @@ window.generateConsolidatedReport = async function() {
 
                 ["1st Delivery", "2nd Delivery"].forEach(slot => {
                     const slotData = vData[slot];
-                    if (slotData.CK.length > 0 || slotData.DSQK.length > 0 || slotData.GJ.length > 0 || slotData.note) {
-                        html += `<div class="mb-6 last:mb-0">
-                            <p class="text-[11px] font-black text-slate-400 uppercase mb-3 bg-slate-100 px-3 py-1 rounded-full inline-block">${slot}</p>`;
+                    const hasItems = slotData.CK.length > 0 || slotData.DSQK.length > 0 || slotData.GJ.length > 0 || slotData.GENERAL.length > 0;
 
-                        ["CK", "DSQK", "GJ"].forEach(supplier => {
-                            const items = slotData[supplier].sort(sortItemsByCustomOrder);
-                            if (items.length > 0) {
-                                html += `<div class="mb-3 pl-2 border-l-4 ${supplier === 'CK' ? 'border-blue-500' : supplier === 'DSQK' ? 'border-orange-500' : 'border-green-500'}">
-                                    <p class="text-[10px] font-black text-slate-400 uppercase">From: ${supplier}</p>`;
+                    if (hasItems || slotData.note) {
+                        html += `<div class="mb-6 last:mb-0">
+                            <div class="flex justify-between items-center bg-slate-100 px-3 py-1 rounded-full mb-3">
+                                <span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">${slot}</span>
+                                
+                                ${window.currentUser.role === 'kitchen' ? 
+                                    `<button onclick="editVenueOrder('${v}', '${dateStr}', '${slot}')" class="text-[10px] font-bold text-blue-600 uppercase underline">✏️ Adjust</button>` 
+                                    : ""
+                                }
+                            </div>`;
+
+                        ["CK", "DSQK", "GJ", "GENERAL"].forEach(supplier => {
+                            const items = slotData[supplier];
+                            if (items && items.length > 0) {
+                                const borderColor = supplier === 'CK' ? 'border-blue-500' : 
+                                                    supplier === 'DSQK' ? 'border-orange-500' : 
+                                                    supplier === 'GJ' ? 'border-green-500' : 'border-slate-400';
+                                
+                                html += `<div class="mb-3 pl-2 border-l-4 ${borderColor}">
+                                    <p class="text-[10px] font-black text-slate-400 uppercase mb-1">From: ${supplier}</p>`;
+                                
                                 items.forEach(i => {
                                     html += `<div class="flex justify-between py-1 border-b border-slate-50 text-sm">
                                         <span class="font-bold text-slate-700">${i.name}</span>
                                         <span class="font-black text-blue-600">x${i.qty}</span>
                                     </div>`;
+                                    if (i.note) html += `<p class="text-[10px] text-red-500 italic mb-1 leading-tight">↳ ${i.note}</p>`;
                                 });
                                 html += `</div>`;
                             }
                         });
-                        if (slotData.note) html += `<div class="mt-2 p-2 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-[11px] font-bold italic">⚠️ ${slotData.note}</div>`;
+
+                        if (slotData.note) {
+                            html += `<div class="mt-2 p-2 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-[11px] text-yellow-800 font-bold italic">⚠️ ${slotData.note}</div>`;
+                        }
                         html += `</div>`;
                     }
                 });
@@ -442,10 +465,12 @@ window.generateConsolidatedReport = async function() {
             }
         });
 
-        res.innerHTML = html;
-    } catch (e) { console.error(e); }
+        res.innerHTML = html || `<p class="text-center p-10 text-slate-400 font-bold">No orders found.</p>`;
+    } catch (e) { 
+        console.error(e);
+        res.innerHTML = `<p class="text-red-500 font-bold p-4 text-center">System Error: Check console.</p>`;
+    }
 };
-
 window.editVenueOrder = function(venueId, dateStr, slot) {
     window.currentUser.venue = venueId;
     updateOverrideIndicator(venueId, true);
