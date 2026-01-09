@@ -259,9 +259,8 @@ window.validateChanges = function() {
 window.submitOrder = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
-    const currentSupplier = document.getElementById('supplier-select').value;
+    const currentComment = document.getElementById('order-comment').value;
     
-    // 1. Get the items currently on the screen (the ones being adjusted)
     const itemsOnScreen = [];
     document.querySelectorAll('#product-list .item-row').forEach(row => {
         const inp = row.querySelector('input[type="number"]');
@@ -273,6 +272,37 @@ window.submitOrder = async function() {
             });
         }
     });
+
+    let finalItems = [];
+    // PRESERVE COMMENT: If the box is empty now, keep the old comment from the DB
+    let finalComment = currentComment || (currentDBOrder ? currentDBOrder.comment : "");
+
+    if (currentDBOrder && currentDBOrder.items) {
+        const otherSupplierItems = currentDBOrder.items.filter(existingItem => 
+            !itemsOnScreen.some(screenItem => screenItem.name === existingItem.name)
+        );
+        finalItems = [...otherSupplierItems, ...itemsOnScreen];
+    } else {
+        finalItems = itemsOnScreen;
+    }
+    
+    const payload = { 
+        venue_id: window.currentUser.venue, 
+        delivery_date: dateStr, 
+        delivery_slot: slot, 
+        items: finalItems, 
+        comment: finalComment 
+    };
+
+    let res = currentDBOrder ? 
+        await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id) : 
+        await _supabase.from('orders').insert([payload]);
+
+    if (!res.error) { 
+        alert("Success: Saved merged order for " + window.currentUser.venue); 
+        applyStandingToDaily(); 
+    }
+};
 
     // 2. Prepare the final item list
     let finalItems = [];
