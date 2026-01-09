@@ -192,25 +192,39 @@ function isItemLocked(itemName) {
 
 function checkFormLock() {
     const dateStr = document.getElementById('delivery-date').value;
+    const currentSupplier = document.getElementById('supplier-select').value;
     const orderDate = new Date(dateStr + "T00:00:00");
     const today = new Date(); today.setHours(0,0,0,0);
     const now = new Date();
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-    let totalLocked = (orderDate <= today) || (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
+    
+    // Standard rule: Locked if date is today/past OR if tomorrow after 1PM
+    let isPastCutoff = (orderDate <= today) || (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
+    
+    // NEW: If we are looking at GJ, we ignore the cutoff for the Save button
+    let totalLocked = isPastCutoff && currentSupplier !== 'GJ';
+
     const btn = document.getElementById('save-btn'), msg = document.getElementById('lock-msg');
     if (totalLocked && window.currentUser.role !== 'kitchen') { 
         if (btn) btn.classList.add('btn-disabled'); 
         if (msg) msg.classList.remove('hidden'); 
     } else {
+        if (btn) btn.classList.remove('btn-disabled'); 
         if (msg) msg.classList.add('hidden');
     }
+    
     activeProducts.forEach(p => {
         const locked = isItemLocked(p.name);
         const input = document.getElementById(`qty-${p.name}`);
         const btns = document.querySelectorAll(`button[data-item="${p.name}"]`);
         if (input) {
-            if (locked) { input.classList.add('locked-qty'); btns.forEach(b => b.classList.add('opacity-30', 'pointer-events-none')); } 
-            else { input.classList.remove('locked-qty'); btns.forEach(b => b.classList.remove('opacity-30', 'pointer-events-none')); }
+            if (locked) { 
+                input.classList.add('locked-qty'); 
+                btns.forEach(b => b.classList.add('opacity-30', 'pointer-events-none')); 
+            } else { 
+                input.classList.remove('locked-qty'); 
+                btns.forEach(b => b.classList.remove('opacity-30', 'pointer-events-none')); 
+            }
         }
     });
 }
