@@ -165,18 +165,28 @@ window.adjustQty = function(itemName, change) {
 
 function isItemLocked(itemName) {
     if (window.currentUser.role === 'kitchen') return false; 
+    
+    // NEW: Find the product to check its supplier
+    const product = activeProducts.find(p => p.name === itemName);
+    if (product && product.supplier === 'GJ') {
+        return false; // GJ items are NEVER locked by time
+    }
+
     const dateStr = document.getElementById('delivery-date').value;
     const now = new Date();
     const orderDate = new Date(dateStr + "T00:00:00");
     const today = new Date(); today.setHours(0,0,0,0);
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
     const dayAfter = new Date(today); dayAfter.setDate(today.getDate() + 2);
+
+    // Standard locking logic for non-GJ items
     if (orderDate <= today) return true;
     if (LEAD_2_DAY_ITEMS.includes(itemName)) {
         if (orderDate.getTime() === tomorrow.getTime()) return true;
         if (orderDate.getTime() === dayAfter.getTime() && now.getHours() >= 13) return true;
     }
     if (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13) return true;
+    
     return false;
 }
 
