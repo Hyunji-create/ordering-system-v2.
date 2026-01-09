@@ -496,14 +496,23 @@ async function loadStandingOrders() {
     const { data } = await _supabase.from('standing_orders').select('*');
     allStandingOrders = data || [];
     renderStandingList();
-    applyStandingToDaily();
+    // No need to call applyStandingToDaily here as it's called during loadProducts
 }
 
 function renderStandingList() {
     const cont = document.getElementById('standing-items-container'); 
     if(!cont) return;
     cont.innerHTML = "";
-    const venueStandings = allStandingOrders.filter(s => s.venue_id === window.currentUser.venue);
+    
+    // Use window.currentUser.venue so Managers can see the venue they are currently overriding
+    const activeVenue = window.currentUser.venue;
+    const venueStandings = allStandingOrders.filter(s => s.venue_id === activeVenue);
+    
+    if (venueStandings.length === 0) {
+        cont.innerHTML = `<p class="text-slate-400 font-bold py-10 uppercase text-[10px]">No standing orders for ${activeVenue}</p>`;
+        return;
+    }
+
     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach(day => {
         const dayOrders = venueStandings.filter(s => s.days_of_week.includes(day));
         if (dayOrders.length > 0) {
@@ -512,7 +521,15 @@ function renderStandingList() {
                 const slotOrders = dayOrders.filter(o => o.delivery_slot === slot).sort(sortItemsByCustomOrder);
                 if (slotOrders.length > 0) {
                     dayHtml += `<div class="pl-2 border-l-2 mb-2 border-slate-200"><p class="text-[9px] font-bold text-slate-400 uppercase italic mb-1">${slot}</p>`;
-                    slotOrders.forEach(s => dayHtml += `<div class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border mb-1"><div><p class="font-bold text-slate-800 text-[12px] uppercase">${s.item_name} x${s.quantity}</p></div><button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase hover:underline">Delete</button></div>`);
+                    slotOrders.forEach(s => {
+                        dayHtml += `
+                        <div class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border mb-1">
+                            <div>
+                                <p class="font-bold text-slate-800 text-[12px] uppercase">${s.item_name} x${s.quantity}</p>
+                            </div>
+                            <button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase hover:underline p-2">Delete</button>
+                        </div>`;
+                    });
                     dayHtml += `</div>`;
                 }
             });
@@ -521,12 +538,30 @@ function renderStandingList() {
     });
 }
 
-window.toggleDay = function(btn) { btn.classList.toggle('day-active'); };
 window.addStandingOrder = async function() {
-    const item = document.getElementById('standing-item').value, slot = document.getElementById('standing-slot').value, qtyInput = document.getElementById('standing-qty'), qty = parseInt(qtyInput.value);
+    const item = document.getElementById('standing-item').value;
+    const slot = document.getElementById('standing-slot').value;
+    const qtyInput = document.getElementById('standing-qty');
+    const qty = parseInt(qtyInput.value);
     const days = Array.from(document.querySelectorAll('.day-active')).map(b => b.dataset.day);
-    if (!item || isNaN(qty) || days.length === 0) return alert("Fill all info.");
-    const { error } = await _supabase.from('standing_orders').insert([{ venue_id: window.currentUser.venue, item_name: item, quantity: qty, delivery_slot: slot, days_of_week: days.join(', ') }]);
-    if(!error) { alert("Added!"); qtyInput.value = ""; document.querySelectorAll('.day-active').forEach(b => b.classList.remove('day-active')); loadStandingOrders(); }
+    
+    if (!item || isNaN(qty) || days.length === 0) return alert("Please select item, quantity, and at least one day.");
+    
+    // VITAL: Saves to the venue currently being managed
+    const { error } = await _supabase.from('standing_orders').insert([{ 
+        venue_id: window.currentUser.venue, 
+        item_name: item, 
+        quantity: qty, 
+        delivery_slot: slot, 
+        days_of_week: days.join(', ') 
+    }]);
+    
+    if(!error) { 
+        alert("Standing Order Added!"); 
+        qtyInput.value = ""; 
+        document.querySelectorAll('.day-active').forEach(b => b.classList.remove('day-active')); 
+        loadStandingOrders(); 
+    } else {
+        alert("Error: " + error.message);
+    }
 };
-window.deleteStanding = async function(id) { if(confirm("Remove?")) { await _supabase.from('standing_orders').delete().eq('id', id); loadStandingOrders(); } };
