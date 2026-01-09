@@ -504,8 +504,9 @@ function renderStandingList() {
     if(!cont) return;
     cont.innerHTML = "";
     
-    // Use window.currentUser.venue so Managers can see the venue they are currently overriding
-    const activeVenue = window.currentUser.venue;
+    // LOCKED: Always use the venue they logged in with, not the override venue
+    const activeVenue = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
+    
     const venueStandings = allStandingOrders.filter(s => s.venue_id === activeVenue);
     
     if (venueStandings.length === 0) {
@@ -524,9 +525,7 @@ function renderStandingList() {
                     slotOrders.forEach(s => {
                         dayHtml += `
                         <div class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border mb-1">
-                            <div>
-                                <p class="font-bold text-slate-800 text-[12px] uppercase">${s.item_name} x${s.quantity}</p>
-                            </div>
+                            <div><p class="font-bold text-slate-800 text-[12px] uppercase">${s.item_name} x${s.quantity}</p></div>
                             <button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase hover:underline p-2">Delete</button>
                         </div>`;
                     });
@@ -545,11 +544,13 @@ window.addStandingOrder = async function() {
     const qty = parseInt(qtyInput.value);
     const days = Array.from(document.querySelectorAll('.day-active')).map(b => b.dataset.day);
     
-    if (!item || isNaN(qty) || days.length === 0) return alert("Please select item, quantity, and at least one day.");
+    if (!item || isNaN(qty) || days.length === 0) return alert("Fill all info.");
     
-    // VITAL: Saves to the venue currently being managed
+    // LOCKED: Force use of originalKitchenVenue so they can't save to the venue they are overriding
+    const targetVenue = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
+
     const { error } = await _supabase.from('standing_orders').insert([{ 
-        venue_id: window.currentUser.venue, 
+        venue_id: targetVenue, 
         item_name: item, 
         quantity: qty, 
         delivery_slot: slot, 
@@ -557,11 +558,9 @@ window.addStandingOrder = async function() {
     }]);
     
     if(!error) { 
-        alert("Standing Order Added!"); 
+        alert("Standing Order Saved to " + targetVenue); 
         qtyInput.value = ""; 
         document.querySelectorAll('.day-active').forEach(b => b.classList.remove('day-active')); 
         loadStandingOrders(); 
-    } else {
-        alert("Error: " + error.message);
     }
 };
