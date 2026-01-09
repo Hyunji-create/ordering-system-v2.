@@ -32,14 +32,21 @@
 
         <div id="view-daily" class="space-y-4">
             <div id="summary-section" class="bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
-                <p class="text-[10px] font-black uppercase mb-4 text-blue-400 tracking-widest">Master Order Summary</p>
-                <div class="flex flex-wrap gap-2">
-                    <input id="admin-view-date" type="date" class="flex-1 min-w-[130px] p-3 rounded-xl text-slate-900 font-bold outline-none">
-                    <button onclick="generateConsolidatedReport()" class="flex-1 bg-blue-600 px-4 py-3 rounded-xl font-black text-[10px] uppercase">View List</button>
-                    <button onclick="exportOrdersToCSV()" class="flex-1 bg-emerald-600 px-4 py-3 rounded-xl font-black text-[10px] uppercase">Export CSV</button>
-                </div>
-                <div id="consolidated-results" class="hidden mt-4 bg-white text-slate-900 p-6 rounded-2xl max-h-[500px] overflow-auto text-left shadow-inner"></div>
-            </div>
+    <div class="flex justify-between items-center mb-4">
+        <p class="text-[10px] font-black uppercase text-blue-400 tracking-widest">Master Order Summary</p>
+        <button id="admin-export-link" onclick="exportOrdersToCSV()" class="hidden text-[9px] font-bold text-slate-500 hover:text-emerald-400 uppercase transition-colors">
+            📥 Export Data
+        </button>
+    </div>
+    
+    <div class="flex gap-2">
+        <input id="admin-view-date" type="date" class="flex-1 p-3 rounded-xl text-slate-900 font-bold outline-none">
+        <button onclick="generateConsolidatedReport()" class="bg-blue-600 px-6 py-3 rounded-xl font-black text-[10px] uppercase">
+            View List
+        </button>
+    </div>
+    <div id="consolidated-results" class="hidden mt-4 bg-white text-slate-900 p-6 rounded-2xl max-h-[500px] overflow-auto text-left shadow-inner"></div>
+</div>
 
             <div id="override-status-indicator" class="hidden transition-all duration-300"></div>
 
