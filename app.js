@@ -49,9 +49,15 @@ function showDashboard() {
     document.getElementById('login-card').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
     document.getElementById('welcome-msg').innerText = window.currentUser.venue;
+    
+    // NEW: Only show the export link if the user is a manager
+    const exportLink = document.getElementById('admin-export-link');
+    if (exportLink && window.currentUser.role === 'kitchen') {
+        exportLink.classList.remove('hidden');
+    }
+
     startApp();
 }
-
 function updateOverrideIndicator(venueName, isOverride = false) {
     const indicator = document.getElementById('override-status-indicator');
     if (isOverride) {
