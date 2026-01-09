@@ -331,8 +331,14 @@ window.generateConsolidatedReport = async function() {
         });
 
         const venueReport = {};
-        ["WYN", "MCC", "WSQ", "DSQ", "GJ"].forEach(v => {
-            venueReport[v] = { "1st Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "" }, "2nd Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "" } };
+        // ADDED "DSQK" and "CK" to the list below
+        const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ", "DSQK", "CK"];
+        
+        venues.forEach(v => {
+            venueReport[v] = { 
+                "1st Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "" }, 
+                "2nd Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "" } 
+            };
         });
 
         (standings || []).forEach(s => {
