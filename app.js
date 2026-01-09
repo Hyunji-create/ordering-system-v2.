@@ -166,11 +166,8 @@ window.adjustQty = function(itemName, change) {
 function isItemLocked(itemName) {
     if (window.currentUser.role === 'kitchen') return false; 
     
-    // NEW: Find the product to check its supplier
     const product = activeProducts.find(p => p.name === itemName);
-    if (product && product.supplier === 'GJ') {
-        return false; // GJ items are NEVER locked by time
-    }
+    if (product && product.supplier === 'GJ') return false; 
 
     const dateStr = document.getElementById('delivery-date').value;
     const now = new Date();
@@ -179,29 +176,24 @@ function isItemLocked(itemName) {
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
     const dayAfter = new Date(today); dayAfter.setDate(today.getDate() + 2);
 
-    // Standard locking logic for non-GJ items
     if (orderDate <= today) return true;
     if (LEAD_2_DAY_ITEMS.includes(itemName)) {
         if (orderDate.getTime() === tomorrow.getTime()) return true;
         if (orderDate.getTime() === dayAfter.getTime() && now.getHours() >= 13) return true;
     }
     if (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13) return true;
-    
     return false;
 }
 
 function checkFormLock() {
     const dateStr = document.getElementById('delivery-date').value;
     const currentSupplier = document.getElementById('supplier-select').value;
+    const now = new Date();
     const orderDate = new Date(dateStr + "T00:00:00");
     const today = new Date(); today.setHours(0,0,0,0);
-    const now = new Date();
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
     
-    // Standard rule: Locked if date is today/past OR if tomorrow after 1PM
     let isPastCutoff = (orderDate <= today) || (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
-    
-    // NEW: If we are looking at GJ, we ignore the cutoff for the Save button
     let totalLocked = isPastCutoff && currentSupplier !== 'GJ';
 
     const btn = document.getElementById('save-btn'), msg = document.getElementById('lock-msg');
@@ -218,13 +210,8 @@ function checkFormLock() {
         const input = document.getElementById(`qty-${p.name}`);
         const btns = document.querySelectorAll(`button[data-item="${p.name}"]`);
         if (input) {
-            if (locked) { 
-                input.classList.add('locked-qty'); 
-                btns.forEach(b => b.classList.add('opacity-30', 'pointer-events-none')); 
-            } else { 
-                input.classList.remove('locked-qty'); 
-                btns.forEach(b => b.classList.remove('opacity-30', 'pointer-events-none')); 
-            }
+            if (locked) { input.classList.add('locked-qty'); btns.forEach(b => b.classList.add('opacity-30', 'pointer-events-none')); } 
+            else { input.classList.remove('locked-qty'); btns.forEach(b => b.classList.remove('opacity-30', 'pointer-events-none')); }
         }
     });
 }
@@ -289,66 +276,39 @@ window.validateChanges = function() {
     }
 };
 
-// --- SAFE MERGE SUBMIT LOGIC ---
 window.submitOrder = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
     const currentComment = document.getElementById('order-comment').value;
-    
-    // 1. Grab items currently visible on screen
     const itemsOnScreen = [];
     document.querySelectorAll('#product-list .item-row').forEach(row => {
         const inp = row.querySelector('input[type="number"]');
         if(inp) {
-            itemsOnScreen.push({ 
-                name: inp.dataset.name, 
-                quantity: parseInt(inp.value) || 0, 
-                comment: row.querySelector('.note-input').value 
-            });
+            itemsOnScreen.push({ name: inp.dataset.name, quantity: parseInt(inp.value) || 0, comment: row.querySelector('.note-input').value });
         }
     });
 
-    // 2. Determine final item list & comment
     let finalItems = [];
     let finalComment = currentComment || (currentDBOrder ? currentDBOrder.comment : "");
-
     if (currentDBOrder && currentDBOrder.items) {
-        // Filter out existing DB items that match items we currently have on screen
-        const otherSupplierItems = currentDBOrder.items.filter(existingItem => 
-            !itemsOnScreen.some(screenItem => screenItem.name === existingItem.name)
-        );
+        const otherSupplierItems = currentDBOrder.items.filter(existingItem => !itemsOnScreen.some(screenItem => screenItem.name === existingItem.name));
         finalItems = [...otherSupplierItems, ...itemsOnScreen];
-    } else {
-        finalItems = itemsOnScreen;
-    }
+    } else { finalItems = itemsOnScreen; }
     
-    const payload = { 
-        venue_id: window.currentUser.venue, 
-        delivery_date: dateStr, 
-        delivery_slot: slot, 
-        items: finalItems, 
-        comment: finalComment 
-    };
-
-    let res = currentDBOrder ? 
-        await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id) : 
-        await _supabase.from('orders').insert([payload]);
+    const payload = { venue_id: window.currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items: finalItems, comment: finalComment };
+    let res = currentDBOrder ? await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id) : await _supabase.from('orders').insert([payload]);
 
     if (!res.error) { 
         alert("Success: Quantities updated for " + window.currentUser.venue); 
         applyStandingToDaily(); 
-    } else {
-        alert("Error saving: " + res.error.message);
-    }
+    } else { alert("Error saving: " + res.error.message); }
 };
 
-// --- CONSOLIDATED REPORT ---
 window.generateConsolidatedReport = async function() {
     const dateStr = document.getElementById('admin-view-date').value;
     const targetDateObj = new Date(dateStr + "T00:00:00");
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDateObj.getDay()];
     const res = document.getElementById('consolidated-results');
-    
     if (!res) return;
     res.innerHTML = "LOADING..."; res.classList.remove('hidden');
 
@@ -361,18 +321,12 @@ window.generateConsolidatedReport = async function() {
         products.forEach(p => {
             let s = p.supplier ? p.supplier.toUpperCase() : "GENERAL";
             if (s === "DSQ") s = "DSQK"; 
-            if (s === "CK") s = "CK";
             supplierMap[p.name] = s;
         });
 
         const venueReport = {};
-        const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ"];
-        
-        venues.forEach(v => {
-            venueReport[v] = {
-                "1st Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "" },
-                "2nd Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "" }
-            };
+        ["WYN", "MCC", "WSQ", "DSQ", "GJ"].forEach(v => {
+            venueReport[v] = { "1st Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "" }, "2nd Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "" } };
         });
 
         (standings || []).forEach(s => {
@@ -380,9 +334,7 @@ window.generateConsolidatedReport = async function() {
                 let supp = supplierMap[s.item_name] || "GENERAL";
                 if(venueReport[s.venue_id]) {
                     const slot = venueReport[s.venue_id][s.delivery_slot];
-                    if (slot && slot[supp]) {
-                        slot[supp].push({ name: s.item_name, qty: s.quantity });
-                    }
+                    if (slot && slot[supp]) slot[supp].push({ name: s.item_name, qty: s.quantity });
                 }
             }
         });
@@ -403,12 +355,9 @@ window.generateConsolidatedReport = async function() {
             }
         });
 
-        let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black text-slate-800">
-                <span>📦 Loading Plan: ${dateStr}</span>
-                <button onclick="window.print()" class="text-blue-600 underline">Print</button>
-            </div>`;
+        let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black text-slate-800"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
 
-        venues.sort().forEach(v => {
+        Object.keys(venueReport).sort().forEach(v => {
             const vData = venueReport[v];
             const hasData = ["1st Delivery", "2nd Delivery"].some(slot => {
                 const s = vData[slot];
@@ -416,61 +365,34 @@ window.generateConsolidatedReport = async function() {
             });
 
             if (hasData) {
-                html += `<div class="mb-8 p-4 border-2 rounded-3xl bg-white shadow-sm border-slate-200">
-                    <h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-100 pb-1 mb-4 uppercase italic">${v}</h2>`;
-
+                html += `<div class="mb-8 p-4 border-2 rounded-3xl bg-white shadow-sm border-slate-200"><h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-100 pb-1 mb-4 uppercase italic">${v}</h2>`;
                 ["1st Delivery", "2nd Delivery"].forEach(slot => {
                     const slotData = vData[slot];
-                    const hasItems = slotData.CK.length > 0 || slotData.DSQK.length > 0 || slotData.GJ.length > 0 || slotData.GENERAL.length > 0;
-
-                    if (hasItems || slotData.note) {
-                        html += `<div class="mb-6 last:mb-0">
-                            <div class="flex justify-between items-center bg-slate-100 px-3 py-1 rounded-full mb-3">
-                                <span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">${slot}</span>
-                                
-                                ${window.currentUser.role === 'kitchen' ? 
-                                    `<button onclick="editVenueOrder('${v}', '${dateStr}', '${slot}')" class="text-[10px] font-bold text-blue-600 uppercase underline">✏️ Adjust</button>` 
-                                    : ""
-                                }
-                            </div>`;
-
+                    if (slotData.CK.length > 0 || slotData.DSQK.length > 0 || slotData.GJ.length > 0 || slotData.GENERAL.length > 0 || slotData.note) {
+                        html += `<div class="mb-6 last:mb-0"><div class="flex justify-between items-center bg-slate-100 px-3 py-1 rounded-full mb-3"><span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">${slot}</span>${window.currentUser.role === 'kitchen' ? `<button onclick="editVenueOrder('${v}', '${dateStr}', '${slot}')" class="text-[10px] font-bold text-blue-600 uppercase underline">✏️ Adjust</button>` : ""}</div>`;
                         ["CK", "DSQK", "GJ", "GENERAL"].forEach(supplier => {
                             const items = slotData[supplier];
                             if (items && items.length > 0) {
-                                const borderColor = supplier === 'CK' ? 'border-blue-500' : 
-                                                    supplier === 'DSQK' ? 'border-orange-500' : 
-                                                    supplier === 'GJ' ? 'border-green-500' : 'border-slate-400';
-                                
-                                html += `<div class="mb-3 pl-2 border-l-4 ${borderColor}">
-                                    <p class="text-[10px] font-black text-slate-400 uppercase mb-1">From: ${supplier}</p>`;
-                                
+                                const borderColor = supplier === 'CK' ? 'border-blue-500' : supplier === 'DSQK' ? 'border-orange-500' : supplier === 'GJ' ? 'border-green-500' : 'border-slate-400';
+                                html += `<div class="mb-3 pl-2 border-l-4 ${borderColor}"><p class="text-[10px] font-black text-slate-400 uppercase mb-1">From: ${supplier}</p>`;
                                 items.forEach(i => {
-                                    html += `<div class="flex justify-between py-1 border-b border-slate-50 text-sm">
-                                        <span class="font-bold text-slate-700">${i.name}</span>
-                                        <span class="font-black text-blue-600">x${i.qty}</span>
-                                    </div>`;
+                                    html += `<div class="flex justify-between py-1 border-b border-slate-50 text-sm"><span class="font-bold text-slate-700">${i.name}</span><span class="font-black text-blue-600">x${i.qty}</span></div>`;
                                     if (i.note) html += `<p class="text-[10px] text-red-500 italic mb-1 leading-tight">↳ ${i.note}</p>`;
                                 });
                                 html += `</div>`;
                             }
                         });
-
-                        if (slotData.note) {
-                            html += `<div class="mt-2 p-2 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-[11px] text-yellow-800 font-bold italic">⚠️ ${slotData.note}</div>`;
-                        }
+                        if (slotData.note) html += `<div class="mt-2 p-2 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-[11px] text-yellow-800 font-bold italic">⚠️ ${slotData.note}</div>`;
                         html += `</div>`;
                     }
                 });
                 html += `</div>`;
             }
         });
-
         res.innerHTML = html || `<p class="text-center p-10 text-slate-400 font-bold">No orders found.</p>`;
-    } catch (e) { 
-        console.error(e);
-        res.innerHTML = `<p class="text-red-500 font-bold p-4 text-center">System Error: Check console.</p>`;
-    }
+    } catch (e) { console.error(e); res.innerHTML = `<p class="text-red-500 font-bold p-4 text-center">System Error: Check console.</p>`; }
 };
+
 window.editVenueOrder = function(venueId, dateStr, slot) {
     window.currentUser.venue = venueId;
     updateOverrideIndicator(venueId, true);
@@ -478,17 +400,16 @@ window.editVenueOrder = function(venueId, dateStr, slot) {
     document.getElementById('delivery-slot').value = slot;
     window.switchTab('daily');
     loadProducts(); 
-    setTimeout(() => {
-        const target = document.getElementById('override-status-indicator');
-        if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 500);
+    setTimeout(() => { document.getElementById('override-status-indicator')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 500);
 };
 
 window.resetToKitchen = function() {
     window.currentUser.venue = originalKitchenVenue;
     updateOverrideIndicator(originalKitchenVenue, false);
+    document.getElementById('welcome-msg').innerText = originalKitchenVenue;
     setTomorrowDate();
     loadProducts();
+    renderStandingList(); // Crucial to bring back the input box
 };
 
 // --- STANDING ORDERS ---
@@ -496,46 +417,28 @@ async function loadStandingOrders() {
     const { data } = await _supabase.from('standing_orders').select('*');
     allStandingOrders = data || [];
     renderStandingList();
-    // No need to call applyStandingToDaily here as it's called during loadProducts
 }
 
 function renderStandingList() {
     const cont = document.getElementById('standing-items-container'); 
-    const inputArea = document.querySelector('#view-standing .bg-blue-900'); // The blue input box
+    const inputArea = document.querySelector('#view-standing .bg-blue-900'); 
     if(!cont) return;
     
-    // 1. Determine if we are currently in "Override/Adjust" mode
     const isOverriding = (window.currentUser.role === 'kitchen' && window.currentUser.venue !== originalKitchenVenue);
-    
-    // 2. Hide or Show the input area based on mode
-    if (inputArea) {
-        if (isOverriding) {
-            inputArea.classList.add('hidden');
-        } else {
-            inputArea.classList.remove('hidden');
-        }
-    }
+    if (inputArea) isOverriding ? inputArea.classList.add('hidden') : inputArea.classList.remove('hidden');
 
     cont.innerHTML = "";
-    
-    // Always use the original kitchen venue for the list to keep it locked
     const activeVenue = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
     const venueStandings = allStandingOrders.filter(s => s.venue_id === activeVenue);
     
     if (venueStandings.length === 0) {
         cont.innerHTML = `<p class="text-slate-400 font-bold py-10 uppercase text-[10px]">No standing orders for ${activeVenue}</p>`;
+        if (isOverriding) cont.innerHTML = `<div class="bg-slate-100 p-4 rounded-2xl mb-4 text-[10px] font-bold text-slate-500 uppercase italic text-center">ℹ️ Standing editing disabled while adjusting others.</div>` + cont.innerHTML;
         return;
     }
 
-    // 3. Add a small notice for Managers so they know why the input is gone
-    if (isOverriding) {
-        cont.innerHTML = `
-            <div class="bg-slate-100 p-4 rounded-2xl mb-4 text-[10px] font-bold text-slate-500 uppercase">
-                ℹ️ Standing Order editing is disabled while adjusting other venues.
-            </div>`;
-    }
+    if (isOverriding) cont.innerHTML = `<div class="bg-slate-100 p-4 rounded-2xl mb-4 text-[10px] font-bold text-slate-500 uppercase italic text-center">ℹ️ Standing editing disabled while adjusting others.</div>`;
 
-    // --- Rest of your existing Mon-Sun rendering logic ---
     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach(day => {
         const dayOrders = venueStandings.filter(s => s.days_of_week.includes(day));
         if (dayOrders.length > 0) {
@@ -545,11 +448,7 @@ function renderStandingList() {
                 if (slotOrders.length > 0) {
                     dayHtml += `<div class="pl-2 border-l-2 mb-2 border-slate-200"><p class="text-[9px] font-bold text-slate-400 uppercase italic mb-1">${slot}</p>`;
                     slotOrders.forEach(s => {
-                        dayHtml += `
-                        <div class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border mb-1">
-                            <div><p class="font-bold text-slate-800 text-[12px] uppercase">${s.item_name} x${s.quantity}</p></div>
-                            <button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase hover:underline p-2 ${isOverriding ? 'hidden' : ''}">Delete</button>
-                        </div>`;
+                        dayHtml += `<div class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border mb-1"><div><p class="font-bold text-slate-800 text-[12px] uppercase">${s.item_name} x${s.quantity}</p></div><button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase hover:underline p-2 ${isOverriding ? 'hidden' : ''}">Delete</button></div>`;
                     });
                     dayHtml += `</div>`;
                 }
@@ -558,60 +457,43 @@ function renderStandingList() {
         }
     });
 }
+
 window.addStandingOrder = async function() {
     const item = document.getElementById('standing-item').value;
     const slot = document.getElementById('standing-slot').value;
     const qtyInput = document.getElementById('standing-qty');
     const qty = parseInt(qtyInput.value);
     const days = Array.from(document.querySelectorAll('.day-active')).map(b => b.dataset.day);
-    
     if (!item || isNaN(qty) || days.length === 0) return alert("Fill all info.");
     
-    // LOCKED: Force use of originalKitchenVenue so they can't save to the venue they are overriding
     const targetVenue = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
+    const { error } = await _supabase.from('standing_orders').insert([{ venue_id: targetVenue, item_name: item, quantity: qty, delivery_slot: slot, days_of_week: days.join(', ') }]);
+    if(!error) { alert("Standing Order Saved!"); qtyInput.value = ""; document.querySelectorAll('.day-active').forEach(b => b.classList.remove('day-active')); loadStandingOrders(); }
+};
 
-    const { error } = await _supabase.from('standing_orders').insert([{ 
-        venue_id: targetVenue, 
-        item_name: item, 
-        quantity: qty, 
-        delivery_slot: slot, 
-        days_of_week: days.join(', ') 
-    }]);
-    
-    if(!error) { 
-        alert("Standing Order Saved to " + targetVenue); 
-        qtyInput.value = ""; 
-        document.querySelectorAll('.day-active').forEach(b => b.classList.remove('day-active')); 
-        loadStandingOrders(); 
+window.deleteStanding = async function(id) {
+    if(confirm("Permanently remove this standing order?")) {
+        const { error } = await _supabase.from('standing_orders').delete().eq('id', id);
+        if(!error) loadStandingOrders();
     }
 };
+
+window.toggleDay = function(btn) { btn.classList.toggle('day-active'); };
+
 window.exportOrdersToCSV = async function() {
     if(!confirm("Download all order history as CSV?")) return;
+    const { data, error } = await _supabase.from('orders').select('delivery_date, delivery_slot, venue_id, items, comment').order('delivery_date', { ascending: false });
+    if (error) { alert("Export failed: " + error.message); return; }
 
-    const { data, error } = await _supabase
-        .from('orders')
-        .select('delivery_date, delivery_slot, venue_id, items, comment')
-        .order('delivery_date', { ascending: false });
-
-    if (error) {
-        alert("Export failed: " + error.message);
-        return;
-    }
-
-    // Convert JSON data to CSV string
     let csvContent = "Date,Slot,Venue,Item,Qty,ItemNote,GeneralNote\n";
-    
     data.forEach(order => {
         order.items.forEach(item => {
-            // Remove commas from notes so they don't break the CSV columns
             const cleanItemNote = (item.comment || "").replace(/,/g, " ");
             const cleanGeneralNote = (order.comment || "").replace(/,/g, " ");
-            
             csvContent += `${order.delivery_date},${order.delivery_slot},${order.venue_id},${item.name},${item.quantity},${cleanItemNote},${cleanGeneralNote}\n`;
         });
     });
 
-    // Create a download link and click it automatically
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
