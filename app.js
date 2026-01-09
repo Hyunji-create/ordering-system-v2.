@@ -19,6 +19,7 @@ let originalKitchenVenue = "";
 
 // --- SESSION & PERSISTENCE ---
 window.onload = function() {
+    _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const savedUser = localStorage.getItem('kitchen_portal_user');
     if (savedUser) {
         window.currentUser = JSON.parse(savedUser);
@@ -70,7 +71,6 @@ function updateOverrideIndicator(venueName, isOverride = false) {
 
 // --- CORE APP LOGIC ---
 function startApp() {
-    _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     setTomorrowDate();
     window.populateSuppliers();
     loadStandingOrders();
@@ -105,13 +105,16 @@ window.populateSuppliers = function() {
 };
 
 async function loadProducts() {
-    const supplier = document.getElementById('supplier-select').value;
+    const supplierSelect = document.getElementById('supplier-select');
+    if (!supplierSelect) return;
+    const supplier = supplierSelect.value;
     const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
     if (data) {
         activeProducts = data.sort(sortItemsByCustomOrder);
         const list = document.getElementById('product-list');
         const drop = document.getElementById('standing-item');
-        list.innerHTML = ""; drop.innerHTML = `<option value="">-- ITEM --</option>`;
+        if (list) list.innerHTML = ""; 
+        if (drop) drop.innerHTML = `<option value="">-- ITEM --</option>`;
         
         activeProducts.forEach(p => {
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
@@ -120,23 +123,25 @@ async function loadProducts() {
             const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
             const leadBadge = isLeadItem ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase tracking-tighter">⚠️ 2-Day Lead</span>` : "";
 
-            list.innerHTML += `
-                <div class="item-row py-4 border-b">
-                    <div class="flex justify-between items-center px-2">
-                        <div class="text-left">
-                            <p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p>
-                            ${leadBadge}
-                            <button onclick="toggleNote('${p.name}')" class="text-[9px] font-black text-blue-500 uppercase mt-1">📝 Note</button>
+            if (list) {
+                list.innerHTML += `
+                    <div class="item-row py-4 border-b">
+                        <div class="flex justify-between items-center px-2">
+                            <div class="text-left">
+                                <p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p>
+                                ${leadBadge}
+                                <button onclick="toggleNote('${p.name}')" class="text-[9px] font-black text-blue-500 uppercase mt-1">📝 Note</button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="adjustQty('${p.name}', -1)" class="qty-btn" data-item="${p.name}">-</button>
+                                <input type="number" id="qty-${p.name}" oninput="validateChanges()" data-name="${p.name}" value="0" inputmode="numeric" pattern="[0-9]*" class="w-12 h-11 bg-white border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
+                                <button type="button" onclick="adjustQty('${p.name}', 1)" class="qty-btn" data-item="${p.name}">+</button>
+                            </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <button type="button" onclick="adjustQty('${p.name}', -1)" class="qty-btn" data-item="${p.name}">-</button>
-                            <input type="number" id="qty-${p.name}" oninput="validateChanges()" data-name="${p.name}" value="0" inputmode="numeric" pattern="[0-9]*" class="w-12 h-11 bg-white border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
-                            <button type="button" onclick="adjustQty('${p.name}', 1)" class="qty-btn" data-item="${p.name}">+</button>
-                        </div>
-                    </div>
-                    <input type="text" id="note-${p.name}" oninput="validateChanges()" placeholder="Note for ${p.name}..." class="note-input">
-                </div>`;
-            drop.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+                        <input type="text" id="note-${p.name}" oninput="validateChanges()" placeholder="Note for ${p.name}..." class="note-input">
+                    </div>`;
+            }
+            if (drop) drop.innerHTML += `<option value="${p.name}">${p.name}</option>`;
         });
         applyStandingToDaily();
     }
@@ -144,7 +149,7 @@ async function loadProducts() {
 
 window.toggleNote = function(name) {
     const el = document.getElementById(`note-${name}`);
-    el.style.display = el.style.display === 'block' ? 'none' : 'block';
+    if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
 };
 
 window.adjustQty = function(itemName, change) {
@@ -184,9 +189,10 @@ function checkFormLock() {
     let totalLocked = (orderDate <= today) || (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
     const btn = document.getElementById('save-btn'), msg = document.getElementById('lock-msg');
     if (totalLocked && window.currentUser.role !== 'kitchen') { 
-        btn.classList.add('btn-disabled'); msg.classList.remove('hidden'); 
+        if (btn) btn.classList.add('btn-disabled'); 
+        if (msg) msg.classList.remove('hidden'); 
     } else {
-        msg.classList.add('hidden');
+        if (msg) msg.classList.add('hidden');
     }
     activeProducts.forEach(p => {
         const locked = isItemLocked(p.name);
@@ -205,9 +211,9 @@ window.applyStandingToDaily = async function() {
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr + "T00:00:00").getDay()];
     document.querySelectorAll('#product-list input[type="number"]').forEach(i => { i.value = "0"; i.classList.remove('auto-filled'); });
     document.querySelectorAll('.note-input').forEach(i => { i.value = ""; i.style.display = 'none'; });
-    document.getElementById('order-comment').value = "";
+    const commentBox = document.getElementById('order-comment');
+    if (commentBox) commentBox.value = "";
     
-    // VITAL FIX: Use the acting venue for the DB query
     const { data } = await _supabase.from('orders').select('*').eq('venue_id', window.currentUser.venue).eq('delivery_date', dateStr).eq('delivery_slot', slot).maybeSingle();
     currentDBOrder = data;
     
@@ -218,11 +224,11 @@ window.applyStandingToDaily = async function() {
                 inp.value = item.quantity;
                 if (item.comment) { 
                     const note = document.getElementById(`note-${item.name}`); 
-                    note.value = item.comment; note.style.display = 'block'; 
+                    if (note) { note.value = item.comment; note.style.display = 'block'; }
                 }
             }
         });
-        document.getElementById('order-comment').value = data.comment || "";
+        if (commentBox) commentBox.value = data.comment || "";
     } else {
         const matches = allStandingOrders.filter(s => s.venue_id === window.currentUser.venue && s.days_of_week.includes(targetDay) && s.delivery_slot === slot);
         matches.forEach(s => { const inp = document.getElementById(`qty-${s.item_name}`); if (inp) { inp.value = s.quantity; inp.classList.add('auto-filled'); } });
@@ -235,7 +241,8 @@ function captureState() {
     const state = [];
     document.querySelectorAll('#product-list input').forEach(i => state.push(i.value));
     document.querySelectorAll('.note-input').forEach(i => state.push(i.value));
-    state.push(document.getElementById('order-comment').value);
+    const commentBox = document.getElementById('order-comment');
+    if (commentBox) state.push(commentBox.value);
     initialFormState = JSON.stringify(state);
     validateChanges();
 }
@@ -244,9 +251,11 @@ window.validateChanges = function() {
     const state = [];
     document.querySelectorAll('#product-list input').forEach(i => state.push(i.value));
     document.querySelectorAll('.note-input').forEach(i => state.push(i.value));
-    state.push(document.getElementById('order-comment').value);
+    const commentBox = document.getElementById('order-comment');
+    if (commentBox) state.push(commentBox.value);
     const currentFormState = JSON.stringify(state);
     const btn = document.getElementById('save-btn');
+    if (!btn) return;
     btn.innerText = "Save Changes";
     if (currentFormState !== initialFormState) { 
         btn.classList.remove('btn-disabled'); 
@@ -256,11 +265,13 @@ window.validateChanges = function() {
     }
 };
 
+// --- SAFE MERGE SUBMIT LOGIC ---
 window.submitOrder = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
     const currentComment = document.getElementById('order-comment').value;
     
+    // 1. Grab items currently visible on screen
     const itemsOnScreen = [];
     document.querySelectorAll('#product-list .item-row').forEach(row => {
         const inp = row.querySelector('input[type="number"]');
@@ -273,11 +284,12 @@ window.submitOrder = async function() {
         }
     });
 
+    // 2. Determine final item list & comment
     let finalItems = [];
-    // PRESERVE COMMENT: If the box is empty now, keep the old comment from the DB
     let finalComment = currentComment || (currentDBOrder ? currentDBOrder.comment : "");
 
     if (currentDBOrder && currentDBOrder.items) {
+        // Filter out existing DB items that match items we currently have on screen
         const otherSupplierItems = currentDBOrder.items.filter(existingItem => 
             !itemsOnScreen.some(screenItem => screenItem.name === existingItem.name)
         );
@@ -299,48 +311,10 @@ window.submitOrder = async function() {
         await _supabase.from('orders').insert([payload]);
 
     if (!res.error) { 
-        alert("Success: Saved merged order for " + window.currentUser.venue); 
-        applyStandingToDaily(); 
-    }
-};
-
-    // 2. Prepare the final item list
-    let finalItems = [];
-
-    if (currentDBOrder && currentDBOrder.items) {
-        // MERGE LOGIC: Start with all existing items from the database
-        // Remove any items that match the supplier currently on screen (we will replace them)
-        const otherSupplierItems = currentDBOrder.items.filter(existingItem => 
-            !itemsOnScreen.some(screenItem => screenItem.name === existingItem.name)
-        );
-        
-        // Combine the "untouched" items with the "newly adjusted" items
-        finalItems = [...otherSupplierItems, ...itemsOnScreen];
-    } else {
-        // No existing order, just use what's on screen
-        finalItems = itemsOnScreen;
-    }
-    
-    const payload = { 
-        venue_id: window.currentUser.venue, 
-        delivery_date: dateStr, 
-        delivery_slot: slot, 
-        items: finalItems, 
-        comment: document.getElementById('order-comment').value 
-    };
-
-    let res;
-    if (currentDBOrder) {
-        res = await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id);
-    } else {
-        res = await _supabase.from('orders').insert([payload]);
-    }
-
-    if (!res.error) { 
-        alert("Success: Quantities updated for " + window.currentUser.venue + " (" + currentSupplier + ")"); 
+        alert("Success: Quantities updated for " + window.currentUser.venue); 
         applyStandingToDaily(); 
     } else {
-        alert("Error saving order: " + res.error.message);
+        alert("Error saving: " + res.error.message);
     }
 };
 
@@ -353,6 +327,7 @@ window.generateConsolidatedReport = async function() {
     const nextDateStr = nextDateObj.toISOString().split('T')[0];
     const nextDayName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][nextDateObj.getDay()];
     const res = document.getElementById('consolidated-results');
+    if (!res) return;
     res.innerHTML = "LOADING..."; res.classList.remove('hidden');
 
     try {
@@ -428,22 +403,15 @@ window.generateConsolidatedReport = async function() {
 };
 
 window.editVenueOrder = function(venueId, dateStr, slot) {
-    // 1. Force the current acting user to be the venue we want to adjust
     window.currentUser.venue = venueId;
     updateOverrideIndicator(venueId, true);
-    
-    // 2. Set the form values
     document.getElementById('delivery-date').value = dateStr;
     document.getElementById('delivery-slot').value = slot;
-    
-    // 3. Switch tabs and load the specific data
     window.switchTab('daily');
-    
-    // VITAL FIX: Force a fresh product load and apply standing for the NEW venue
     loadProducts(); 
-    
     setTimeout(() => {
-        document.getElementById('override-status-indicator').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const target = document.getElementById('override-status-indicator');
+        if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 500);
 };
 
@@ -463,7 +431,8 @@ async function loadStandingOrders() {
 }
 
 function renderStandingList() {
-    const cont = document.getElementById('standing-items-container'); if(!cont) return;
+    const cont = document.getElementById('standing-items-container'); 
+    if(!cont) return;
     cont.innerHTML = "";
     const venueStandings = allStandingOrders.filter(s => s.venue_id === window.currentUser.venue);
     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach(day => {
