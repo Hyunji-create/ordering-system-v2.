@@ -86,10 +86,9 @@ function startApp() {
 window.populateSuppliers = function() {
     const select = document.getElementById('supplier-select');
     if(select && !select.innerHTML) {
-        // We match the 'value' exactly to your Supabase column: DSQK
         select.innerHTML = `
             <option value="CK">CK</option>
-            <option value="DSQK">DSQK</option>
+            <option value="DSQK">DSQK</option> 
             <option value="GJ">GJ</option>
         `;
     }
