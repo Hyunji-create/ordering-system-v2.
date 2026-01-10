@@ -46,6 +46,13 @@
             <button onclick="switchTab('standing')" id="tab-standing" class="py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400">🔄 Standing Order</button>
         </div>
 
+        <div class="bg-white p-6 rounded-3xl shadow-lg space-y-6 mb-6">
+             <div class="flex items-center gap-3">
+                <label class="w-24 text-left text-[10px] font-black text-slate-400 uppercase tracking-tighter">Supplier</label>
+                <select id="supplier-select" onchange="loadProducts()" class="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs outline-none focus:border-blue-500"></select>
+            </div>
+        </div>
+
         <div id="view-daily" class="space-y-4">
             <div id="summary-section" class="bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
                 <div class="flex justify-between items-center mb-4">
@@ -68,10 +75,6 @@
 
             <div class="bg-white p-6 rounded-3xl shadow-lg space-y-6">
                 <div class="space-y-3">
-                    <div class="flex items-center gap-3">
-                        <label class="w-24 text-left text-[10px] font-black text-slate-400 uppercase tracking-tighter">Supplier</label>
-                        <select id="supplier-select" onchange="loadProducts()" class="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold uppercase text-xs outline-none focus:border-blue-500"></select>
-                    </div>
                     <div class="flex items-center gap-3">
                         <label class="w-24 text-left text-[10px] font-black text-slate-400 uppercase tracking-tighter">Delivery Date</label>
                         <input id="delivery-date" type="date" onchange="applyStandingToDaily()" class="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-center outline-none focus:border-blue-500">
@@ -99,6 +102,8 @@
 
         <div id="view-standing" class="hidden space-y-4 text-center">
             <div class="bg-blue-900 text-white p-8 rounded-3xl shadow-xl">
+                <h3 class="font-black text-lg uppercase italic mb-4">Set Recurring Schedule</h3>
+                
                 <div class="flex flex-wrap gap-2 justify-center mb-6" id="day-selector">
                     <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Mon">MON</button>
                     <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Tue">TUE</button>
@@ -111,20 +116,16 @@
                 
                 <div class="space-y-4 text-slate-900 bg-white/10 p-4 rounded-2xl">
                     <div class="flex items-center gap-3">
-                        <label class="w-20 text-left text-[10px] font-black text-blue-200 uppercase tracking-tighter">Item</label>
-                        <select id="standing-item" class="flex-1 p-4 rounded-2xl font-bold uppercase text-xs text-slate-900 outline-none"></select>
-                    </div>
-                    <div class="flex items-center gap-3">
                         <label class="w-20 text-left text-[10px] font-black text-blue-200 uppercase tracking-tighter">Setup</label>
-                        <div class="flex-1 flex gap-2">
-                            <select id="standing-slot" class="flex-1 p-4 rounded-2xl font-bold uppercase text-xs text-slate-900">
-                                <option value="1st Delivery">1st Delivery</option>
-                                <option value="2nd Delivery">2nd Delivery</option>
-                            </select>
-                            <input id="standing-qty" type="number" placeholder="QTY" class="w-20 p-4 rounded-2xl text-center font-black text-slate-900">
-                        </div>
+                        <select id="standing-slot" class="flex-1 p-4 rounded-2xl font-bold uppercase text-xs text-slate-900">
+                            <option value="1st Delivery">1st Delivery</option>
+                            <option value="2nd Delivery">2nd Delivery</option>
+                        </select>
                     </div>
-                    <button onclick="saveStandingSchedule()" class="w-full bg-white text-blue-900 font-black py-5 rounded-2xl uppercase shadow-lg mt-2">Save Schedule</button>
+                    
+                    <div id="standing-product-list" class="bg-white rounded-2xl p-2 mb-4 text-black max-h-[400px] overflow-y-auto"></div>
+
+                    <button onclick="saveStandingSchedule()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-black py-5 rounded-2xl uppercase shadow-lg mt-2 transition-colors">💾 Save Schedule</button>
                 </div>
             </div>
             <div id="standing-items-container" class="bg-white p-6 rounded-3xl shadow-md border border-slate-100 space-y-6"></div>
