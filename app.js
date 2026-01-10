@@ -129,7 +129,6 @@ window.switchTab = function(v) {
 
 async function loadProducts() {
     const supplier = document.getElementById('supplier-select').value;
-    const slot = document.getElementById('delivery-slot').value;
     const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
     
     if (data) {
@@ -140,13 +139,15 @@ async function loadProducts() {
         if (drop) drop.innerHTML = `<option value="">-- ITEM --</option>`;
         
         activeProducts.forEach(p => {
-            if (supplier === 'GJ' && slot === '1st Delivery') return;
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
             const userVenue = window.currentUser.venue;
 
-            // FIX: Ensure no-restriction items show, and restricted items match venue exactly
-            let hasAccess = !p.restricted_to || allowed.includes(userVenue);
-            if (!hasAccess) return;
+            // Visibility Logic: If item is restricted, check if user is in list
+            if (p.restricted_to && !allowed.includes(userVenue)) {
+                // Bridge Case: Allow DSQK to see DSQ and vice-versa
+                const isDSQPair = (userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ')));
+                if (!isDSQPair) return;
+            }
 
             const isLead = LEAD_2_DAY_ITEMS.includes(p.name);
             const badge = isLead ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase">⚠️ 2-Day Lead</span>` : "";
@@ -272,7 +273,7 @@ window.generateConsolidatedReport = async function() {
     const targetDateObj = new Date(dateStr + "T00:00:00");
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDateObj.getDay()];
     
-    // FIX: 2nd Day Lead means 48h. For the 10/1 Loading Plan, we look at orders for 12/1.
+    // FIX: 2-Day Lead = 48h. Loading Plan for Sat looks at Mon.
     const leadDateObj = new Date(targetDateObj); leadDateObj.setDate(leadDateObj.getDate() + 2); 
     const leadDateStr = leadDateObj.toISOString().split('T')[0];
     const leadDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][leadDateObj.getDay()];
@@ -293,15 +294,14 @@ window.generateConsolidatedReport = async function() {
         const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ", "DSQK", "CK"];
         venues.forEach(v => { venueReport[v] = { "1st Delivery": { CK:[], DSQK:[], GJ:[], GENERAL:[], note:"", hasDaily: false }, "2nd Delivery": { CK:[], DSQK:[], GJ:[], GENERAL:[], note:"", hasDaily: false } }; });
 
-        // 1. Daily Orders (Priority)
-        allOrders.forEach(o => {
+        // 1. Process Daily Orders
+        (allOrders || []).forEach(o => {
             if (o.delivery_date === dateStr && venueReport[o.venue_id]) {
                 const sData = venueReport[o.venue_id][o.delivery_slot];
                 sData.note = o.comment || ""; sData.hasDaily = true;
                 o.items.forEach(i => {
-                    const s = suppMap[i.name] || "GENERAL";
-                    if (s === 'GJ' && o.delivery_slot === '1st Delivery') return;
                     if (i.quantity > 0) {
+                        const s = suppMap[i.name] || "GENERAL";
                         sData[s].push({ name: i.name, qty: i.quantity, note: i.comment || "" });
                         if (totalPrep.hasOwnProperty(i.name)) totalPrep[i.name] += i.quantity;
                     }
@@ -312,13 +312,12 @@ window.generateConsolidatedReport = async function() {
             }
         });
 
-        // 2. Standing Orders (Fallback)
+        // 2. Process Standing Orders
         standings.forEach(s => {
-            const supp = suppMap[s.item_name] || "GENERAL";
-            if (supp === 'GJ' && s.delivery_slot === '1st Delivery') return;
             if (s.days_of_week.includes(targetDay) && venueReport[s.venue_id]) {
                 const sData = venueReport[s.venue_id][s.delivery_slot];
                 if (!sData.hasDaily) {
+                    const supp = suppMap[s.item_name] || "GENERAL";
                     sData[supp].push({ name: s.item_name, qty: s.quantity });
                     if (totalPrep.hasOwnProperty(s.item_name)) totalPrep[s.item_name] += s.quantity;
                 }
@@ -330,14 +329,14 @@ window.generateConsolidatedReport = async function() {
         });
 
         let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
-        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep (Today)</h2><div class="grid grid-cols-3 gap-4">`;
+        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white print:border-slate-300"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep (Today)</h2><div class="grid grid-cols-3 gap-4">`;
         for (const [n, q] of Object.entries(totalPrep)) html += `<div class="bg-white p-2 rounded-xl text-center border border-emerald-100"><p class="text-[9px] font-bold text-slate-400 uppercase">${n}</p><p class="text-lg font-black text-emerald-600">${q}</p></div>`;
         html += `</div></div>`;
 
         if (Object.keys(leadPrep).length > 0) {
-            html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (For delivery on ${leadDateStr})</h2>`;
-            for (const [n, q] of Object.entries(leadPrep)) html += `<div class="flex justify-between py-1 border-b border-orange-100 text-xs font-bold uppercase"><span>${n}</span><span>x${q}</span></div>`;
-            html += `<p class="text-[8px] text-orange-400 mt-2 italic">* These items take 48h. Start them today to ship in 2 days.</p></div>`;
+            html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (Orders for ${leadDateStr})</h2>`;
+            for (const [n, q] of Object.entries(leadPrep)) html += `<div class="flex justify-between py-1 border-b border-orange-100 text-xs font-bold uppercase"><span>${name}</span><span>x${q}</span></div>`;
+            html += `<p class="text-[8px] text-orange-400 mt-2 italic font-black uppercase">* 48h Lead Time items. Start today for delivery in 2 days.</p></div>`;
         }
 
         Object.keys(venueReport).sort().forEach(v => {
@@ -371,7 +370,7 @@ window.generateConsolidatedReport = async function() {
             }
         });
         res.innerHTML = html;
-    } catch (e) { console.error(e); res.innerHTML = "Error loading report."; }
+    } catch (e) { console.error(e); res.innerHTML = "Error."; }
 };
 
 window.editVenueOrder = function(v, d, s) {
@@ -389,13 +388,10 @@ window.resetToKitchen = function() {
 async function loadStandingOrders() { const { data } = await _supabase.from('standing_orders').select('*'); allStandingOrders = data || []; renderStandingList(); }
 
 function renderStandingList() {
-    const cont = document.getElementById('standing-items-container'); 
-    const inputArea = document.querySelector('#view-standing .bg-blue-900'); 
-    if(!cont) return; 
-    const isO = (window.currentUser.role === 'kitchen' && window.currentUser.venue !== originalKitchenVenue);
+    const cont = document.getElementById('standing-items-container'); const inputArea = document.querySelector('#view-standing .bg-blue-900'); 
+    if(!cont) return; const isO = (window.currentUser.role === 'kitchen' && window.currentUser.venue !== originalKitchenVenue);
     if (inputArea) isO ? inputArea.classList.add('hidden') : inputArea.classList.remove('hidden');
-    cont.innerHTML = ""; 
-    const activeV = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
+    cont.innerHTML = ""; const activeV = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
     const vStandings = allStandingOrders.filter(s => s.venue_id === activeV);
     if (vStandings.length === 0) { cont.innerHTML = `<p class="text-slate-400 font-bold py-10 uppercase text-[10px]">No standing orders for ${activeV}</p>`; return; }
     if (isO) cont.innerHTML = `<div class="bg-slate-100 p-4 rounded-2xl mb-4 text-[10px] font-bold text-slate-500 uppercase italic text-center">ℹ️ Standing editing disabled while adjusting others.</div>`;
