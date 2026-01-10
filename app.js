@@ -165,10 +165,17 @@ window.switchTab = function(view) {
 async function loadProducts() {
     const supplierSelect = document.getElementById('supplier-select');
     if (!supplierSelect) return;
-    const supplier = supplierSelect.value;
+    const selectedSupplier = supplierSelect.value;
     const slot = document.getElementById('delivery-slot').value;
-    const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
+
+    // Fetch data from Supabase for the selected supplier
+    const { data, error } = await _supabase.from('products').select('*').eq('supplier', selectedSupplier);
     
+    if (error) {
+        console.error("Supabase Error:", error);
+        return;
+    }
+
     if (data) {
         activeProducts = data.sort(sortItemsByCustomOrder);
         const list = document.getElementById('product-list');
@@ -177,14 +184,16 @@ async function loadProducts() {
         if (drop) drop.innerHTML = `<option value="">-- ITEM --</option>`;
         
         activeProducts.forEach(p => {
-            // RULE: GJ only in 2nd Run
-            if (p.supplier === 'GJ' && slot === '1st Delivery') return;
+            // RULE 1: If GJ is selected but it's the 1st Delivery, block the whole list
+            if (selectedSupplier === 'GJ' && slot === '1st Delivery') return;
 
+            // RULE 2: Standard Venue Restriction check
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
             const userVenue = window.currentUser.venue;
 
-            if (p.restricted_to) {
-                if (!allowed.includes(userVenue)) return;
+            if (p.restricted_to && !allowed.includes(userVenue)) {
+                // This hides items meant for other shops
+                return;
             }
 
             const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
