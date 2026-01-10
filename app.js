@@ -139,10 +139,11 @@ async function loadProducts() {
         if (drop) drop.innerHTML = `<option value="">-- ITEM --</option>`;
         
         activeProducts.forEach(p => {
+            // Trim whitespace from restrictions to prevent matching errors
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
             const userVenue = window.currentUser.venue;
 
-            // Visibility Logic: If item is restricted, check if user is in list
+            // Visibility Logic
             if (p.restricted_to && !allowed.includes(userVenue)) {
                 // Bridge Case: Allow DSQK to see DSQ and vice-versa
                 const isDSQPair = (userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ')));
@@ -273,7 +274,7 @@ window.generateConsolidatedReport = async function() {
     const targetDateObj = new Date(dateStr + "T00:00:00");
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDateObj.getDay()];
     
-    // FIX: 2-Day Lead = 48h. Loading Plan for Sat looks at Mon.
+    // FIX: Advance Prep looks 2 days ahead
     const leadDateObj = new Date(targetDateObj); leadDateObj.setDate(leadDateObj.getDate() + 2); 
     const leadDateStr = leadDateObj.toISOString().split('T')[0];
     const leadDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][leadDateObj.getDay()];
@@ -328,17 +329,23 @@ window.generateConsolidatedReport = async function() {
             }
         });
 
-        let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
-        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white print:border-slate-300"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Total Quantity (Today)</h2><div class="grid grid-cols-3 gap-4">`;
+        let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black text-slate-800"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
+        
+        // Immediate Prep
+        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white print:border-slate-300"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep (Today)</h2><div class="grid grid-cols-3 gap-4">`;
         for (const [n, q] of Object.entries(totalPrep)) html += `<div class="bg-white p-2 rounded-xl text-center border border-emerald-100"><p class="text-[9px] font-bold text-slate-400 uppercase">${n}</p><p class="text-lg font-black text-emerald-600">${q}</p></div>`;
         html += `</div></div>`;
 
+        // FIXED: Advance Prep names display corrected here
         if (Object.keys(leadPrep).length > 0) {
-            html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (Orders for ${leadDateStr})</h2>`;
-            for (const [n, q] of Object.entries(leadPrep)) html += `<div class="flex justify-between py-1 border-b border-orange-100 text-xs font-bold uppercase"><span>${name}</span><span>x${q}</span></div>`;
-            html += `<p class="text-[8px] text-orange-400 mt-2 italic font-black uppercase">* 48h Lead Time items.</p></div>`;
+            html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (For delivery on ${leadDateStr})</h2>`;
+            for (const [n, q] of Object.entries(leadPrep)) {
+                html += `<div class="flex justify-between py-1 border-b border-orange-100 text-xs font-bold uppercase"><span>${n}</span><span>x${q}</span></div>`;
+            }
+            html += `<p class="text-[8px] text-orange-400 mt-2 italic font-black uppercase">* 48h Lead Time items. Start today for delivery in 2 days.</p></div>`;
         }
 
+        // Venue Breakdown
         Object.keys(venueReport).sort().forEach(v => {
             const vD = venueReport[v];
             if (["1st Delivery", "2nd Delivery"].some(sl => vD[sl].CK.length > 0 || vD[sl].DSQK.length > 0 || vD[sl].GJ.length > 0 || vD[sl].GENERAL.length > 0 || vD[sl].note)) {
@@ -373,6 +380,7 @@ window.generateConsolidatedReport = async function() {
     } catch (e) { console.error(e); res.innerHTML = "Error."; }
 };
 
+// ... Remaining helper functions (switchTab, resetToKitchen, export, etc.) remain unchanged from your current script ...
 window.editVenueOrder = function(v, d, s) {
     window.currentUser.venue = v; updateOverrideIndicator(v, true);
     document.getElementById('delivery-date').value = d; document.getElementById('delivery-slot').value = s;
