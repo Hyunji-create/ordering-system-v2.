@@ -6,7 +6,7 @@ const USERS = [
     { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'venue' },
     { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'venue' },
     { id: 'wsqstaff', pw: 'wsqstaff', venue: 'WSQ', role: 'venue' },
-    { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'venue' },
+    { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQK', role: 'venue' }, // Matches DSQK database label
     { id: 'gjstaff', pw: 'gjstaff', venue: 'GJ', role: 'venue' },
     { id: 'dsqkmanager', pw: 'dsqkmanager', venue: 'DSQK', role: 'kitchen' },
     { id: 'ckmanager', pw: 'ckmanager', venue: 'CK', role: 'kitchen' }
@@ -50,14 +50,13 @@ function showDashboard() {
     document.getElementById('dashboard').classList.remove('hidden');
     document.getElementById('welcome-msg').innerText = window.currentUser.venue;
     
-    // NEW: Only show the export link if the user is a manager
     const exportLink = document.getElementById('admin-export-link');
     if (exportLink && window.currentUser.role === 'kitchen') {
         exportLink.classList.remove('hidden');
     }
-
     startApp();
 }
+
 function updateOverrideIndicator(venueName, isOverride = false) {
     const indicator = document.getElementById('override-status-indicator');
     if (isOverride) {
@@ -78,11 +77,10 @@ function updateOverrideIndicator(venueName, isOverride = false) {
 // --- CORE APP LOGIC ---
 function startApp() {
     setTomorrowDate();
-    window.populateSuppliers(); // Calls the dropdown builder
-    loadStandingOrders();       // Loads the standing order list
+    window.populateSuppliers();
+    loadStandingOrders(); 
 }
 
-// This DEFINES the function (Keep it outside startApp)
 window.populateSuppliers = function() {
     const select = document.getElementById('supplier-select');
     if(select && !select.innerHTML) {
@@ -115,12 +113,6 @@ window.switchTab = function(view) {
     document.getElementById('view-standing').classList.toggle('hidden', view !== 'standing');
     document.getElementById('tab-daily').className = view === 'daily' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
     document.getElementById('tab-standing').className = view === 'standing' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
-};
-
-window.populateSuppliers = function() {
-    const select = document.getElementById('supplier-select');
-    if(select && !select.innerHTML) select.innerHTML = `<option value="CK">CK</option><option value="DSQ">DSQ</option><option value="GJ">GJ</option>`;
-    loadProducts();
 };
 
 async function loadProducts() {
@@ -184,7 +176,6 @@ window.adjustQty = function(itemName, change) {
 
 function isItemLocked(itemName) {
     if (window.currentUser.role === 'kitchen') return false; 
-    
     const product = activeProducts.find(p => p.name === itemName);
     if (product && product.supplier === 'GJ') return false; 
 
@@ -338,13 +329,12 @@ window.generateConsolidatedReport = async function() {
         
         const supplierMap = {};
         products.forEach(p => {
-    let s = p.supplier ? p.supplier.toUpperCase() : "GENERAL";
-    supplierMap[p.name] = s; // Just take the name exactly as it is
-});
+            let s = p.supplier ? p.supplier.toUpperCase() : "GENERAL";
+            supplierMap[p.name] = s;
+        });
 
         const venueReport = {};
-        // ADDED "DSQK" and "CK" to the list below
-        const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ", "DSQK", "CK"];
+        const venues = ["WYN", "MCC", "WSQ", "GJ", "DSQK", "CK"];
         
         venues.forEach(v => {
             venueReport[v] = { 
@@ -433,7 +423,7 @@ window.resetToKitchen = function() {
     document.getElementById('welcome-msg').innerText = originalKitchenVenue;
     setTomorrowDate();
     loadProducts();
-    renderStandingList(); // Crucial to bring back the input box
+    renderStandingList();
 };
 
 // --- STANDING ORDERS ---
