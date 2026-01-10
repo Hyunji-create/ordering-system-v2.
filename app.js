@@ -329,7 +329,7 @@ window.generateConsolidatedReport = async function() {
         });
 
         let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
-        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white print:border-slate-300"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep (Today)</h2><div class="grid grid-cols-3 gap-4">`;
+        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white print:border-slate-300"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Total Quantity (Today)</h2><div class="grid grid-cols-3 gap-4">`;
         for (const [n, q] of Object.entries(totalPrep)) html += `<div class="bg-white p-2 rounded-xl text-center border border-emerald-100"><p class="text-[9px] font-bold text-slate-400 uppercase">${n}</p><p class="text-lg font-black text-emerald-600">${q}</p></div>`;
         html += `</div></div>`;
 
