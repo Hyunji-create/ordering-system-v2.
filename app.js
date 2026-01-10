@@ -25,6 +25,7 @@ window.onload = function() {
         window.currentUser = JSON.parse(savedUser);
         if (window.currentUser.role === 'kitchen') originalKitchenVenue = window.currentUser.venue;
         showDashboard();
+        checkMaintenanceMode(); // Check status on load
     }
 };
 
@@ -37,6 +38,7 @@ window.handleLogin = function() {
         localStorage.setItem('kitchen_portal_user', JSON.stringify(window.currentUser));
         if (found.role === 'kitchen') originalKitchenVenue = found.venue;
         showDashboard();
+        checkMaintenanceMode();
     } else { alert("Login failed."); }
 };
 
@@ -56,6 +58,53 @@ function showDashboard() {
     }
     startApp();
 }
+
+// --- MAINTENANCE MODE LOGIC ---
+async function checkMaintenanceMode() {
+    const { data } = await _supabase.from('app_settings').select('setting_value').eq('setting_key', 'maintenance_mode').single();
+    const isMaint = data && data.setting_value === 'true';
+
+    // Toggle button visibility only for ckmanager
+    const maintBtn = document.getElementById('maint-toggle-btn');
+    if (maintBtn) {
+        if (window.currentUser.id === 'ckmanager') {
+            maintBtn.classList.remove('hidden');
+            maintBtn.innerText = isMaint ? "⚠️ Disable Maintenance Mode" : "🛠️ Enable Maintenance Mode";
+        } else {
+            maintBtn.classList.add('hidden');
+        }
+    }
+
+    // Show overlay if active and user is NOT ckmanager
+    if (isMaint && window.currentUser.id !== 'ckmanager') {
+        document.getElementById('maintenance-overlay').classList.remove('hidden');
+    }
+}
+
+window.toggleMaintenance = async function() {
+    const { data: currentData } = await _supabase.from('app_settings').select('setting_value').eq('setting_key', 'maintenance_mode').single();
+    const currentStatus = currentData.setting_value === 'true';
+    const newStatus = !currentStatus;
+
+    const { error } = await _supabase
+        .from('app_settings')
+        .update({ setting_value: newStatus.toString() })
+        .eq('setting_key', 'maintenance_mode');
+
+    if (!error) {
+        alert("Maintenance Mode: " + (newStatus ? "ENABLED" : "DISABLED"));
+        location.reload();
+    }
+};
+
+window.checkMaintPassword = function() {
+    const pw = document.getElementById('maint-pw').value;
+    if (pw === '1019') {
+        document.getElementById('maintenance-overlay').classList.add('hidden');
+    } else {
+        alert("Incorrect Access Code.");
+    }
+};
 
 function updateOverrideIndicator(venueName, isOverride = false) {
     const indicator = document.getElementById('override-status-indicator');
@@ -133,9 +182,13 @@ async function loadProducts() {
             const userVenue = window.currentUser.venue;
 
             if (p.restricted_to) {
-                const userVenue = window.currentUser.venue;
-                // Only allow access if the user's venue is explicitly in the allowed list
-                if (!allowed.includes(userVenue)) return;
+                let hasAccess = allowed.includes(userVenue);
+                // Bridge logic for DSQ/DSQK
+                if ((userVenue === 'DSQ' || userVenue === 'DSQK') && 
+                    (allowed.includes('DSQ') || allowed.includes('DSQK'))) {
+                    hasAccess = true;
+                }
+                if (!hasAccess) return;
             }
 
             const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
