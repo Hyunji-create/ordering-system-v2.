@@ -395,13 +395,15 @@ window.generateConsolidatedReport = async function() {
         }
 
         Object.keys(venueReport).sort().forEach(v => {
+            // FIX: Defined variable as 'vData' so we must use 'vData' below
             const vData = venueReport[v];
+            
+            // FIX: Used 'vData' here instead of 'vD'
             if (["1st Delivery", "2nd Delivery"].some(slot => vData[slot].CK.length > 0 || vData[slot].DSQK.length > 0 || vData[slot].GJ.length > 0 || vData[slot].GENERAL.length > 0 || vData[slot].note)) {
                 html += `<div class="mb-8 p-5 bg-white border-2 border-slate-200 rounded-3xl shadow-sm print:shadow-none"><h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-50 pb-1 mb-4 uppercase italic">${v}</h2>`;
                 ["1st Delivery", "2nd Delivery"].forEach(sl => {
-                    const sD = vD[sl];
+                    const sD = vData[sl]; // FIX: Used 'vData' here too
                     if (sD.CK.length > 0 || sD.DSQK.length > 0 || sD.GJ.length > 0 || sD.GENERAL.length > 0 || sD.note) {
-                        // ADJUST BUTTON IS HERE 👇
                         html += `<div class="mb-6 last:mb-0"><div class="flex justify-between items-center text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-1 border-b border-slate-100">
                                     <span>${sl}</span>
                                     ${window.currentUser.role === 'kitchen' ? `<button onclick="editVenueOrder('${v}', '${dateStr}', '${sl}')" class="text-blue-600 underline text-[10px] font-bold">✏️ Adjust</button>` : ""}
