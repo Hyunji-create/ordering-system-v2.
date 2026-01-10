@@ -10,7 +10,7 @@ const USERS = [
     { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'venue' },
     { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'venue' },
     { id: 'wsqstaff', pw: 'wsqstaff', venue: 'WSQ', role: 'venue' },
-    { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'venue' }, 
+    { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'venue' },
     { id: 'gjstaff', pw: 'gjstaff', venue: 'GJ', role: 'venue' },
     { id: 'dsqkmanager', pw: 'dsqkmanager', venue: 'DSQK', role: 'kitchen' },
     { id: 'ckmanager', pw: 'ckmanager', venue: 'CK', role: 'kitchen' }
@@ -29,7 +29,7 @@ window.onload = function() {
         window.currentUser = JSON.parse(savedUser);
         if (window.currentUser.role === 'kitchen') originalKitchenVenue = window.currentUser.venue;
         showDashboard();
-        checkMaintenanceMode(); 
+        checkMaintenanceMode();
     }
 };
 
@@ -74,23 +74,47 @@ async function checkMaintenanceMode() {
     }
 }
 
+window.toggleMaintenance = async function() {
+    const confirmPw = prompt("Enter Admin Password:");
+    if (confirmPw !== '1019') return alert("Wrong password.");
+    const { data: currentData } = await _supabase.from('app_settings').select('setting_value').eq('setting_key', 'maintenance_mode').single();
+    const newStatus = currentData.setting_value !== 'true';
+    await _supabase.from('app_settings').update({ setting_value: newStatus.toString() }).eq('setting_key', 'maintenance_mode');
+    location.reload();
+};
+
+window.checkMaintPassword = function() {
+    if (document.getElementById('maint-pw').value === '1019') document.getElementById('maintenance-overlay').classList.add('hidden');
+};
+
+function updateOverrideIndicator(venueName, isOverride = false) {
+    const indicator = document.getElementById('override-status-indicator');
+    if (isOverride) {
+        indicator.classList.remove('hidden');
+        indicator.innerHTML = `
+            <div class="bg-red-600 text-white p-4 rounded-2xl flex justify-between items-center shadow-lg border-b-4 border-red-800 mb-4">
+                <div class="text-left">
+                    <p class="text-[9px] font-black uppercase tracking-widest opacity-80 mb-1">Override Mode Active</p>
+                    <p class="text-lg font-black tracking-tighter uppercase leading-none">ACTING FOR: ${venueName}</p>
+                </div>
+                <button onclick="resetToKitchen()" class="bg-white text-red-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase shadow-md">Exit</button>
+            </div>`;
+    } else indicator.classList.add('hidden');
+}
+
 // --- CORE APP LOGIC ---
 function startApp() {
     setTomorrowDate();
     window.populateSuppliers();
-    loadStandingOrders(); 
+    loadStandingOrders();
 }
 
-window.populateSuppliers = function() {
-    const select = document.getElementById('supplier-select');
-    if(select && !select.innerHTML) select.innerHTML = `<option value="CK">CK</option><option value="DSQK">DSQK</option><option value="GJ">GJ</option>`;
-    loadProducts();
-};
-
 function sortItemsByCustomOrder(a, b) {
-    const nA = a.name || a.item_name || ""; const nB = b.name || b.item_name || "";
-    let iA = PRODUCT_ORDER.indexOf(nA); let iB = PRODUCT_ORDER.indexOf(nB);
-    return (iA === -1 ? 999 : iA) - (iB === -1 ? 999 : iB);
+    const nameA = a.name || a.item_name || "";
+    const nameB = b.name || b.item_name || "";
+    let idxA = PRODUCT_ORDER.indexOf(nameA);
+    let idxB = PRODUCT_ORDER.indexOf(nameB);
+    return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
 }
 
 function setTomorrowDate() {
@@ -100,29 +124,28 @@ function setTomorrowDate() {
     document.getElementById('admin-view-date').value = iso;
 }
 
-window.switchTab = function(v) {
-    document.getElementById('view-daily').classList.toggle('hidden', v !== 'daily');
-    document.getElementById('view-standing').classList.toggle('hidden', v !== 'standing');
-    
-    // Ensure the Supplier selection header stays visible for both tabs
+window.switchTab = function(view) {
+    document.getElementById('view-daily').classList.toggle('hidden', view !== 'daily');
+    document.getElementById('view-standing').classList.toggle('hidden', view !== 'standing');
     const header = document.querySelector('.bg-white.p-6.rounded-3xl.shadow-sm.mb-6');
     if (header) header.classList.remove('hidden');
+    document.getElementById('tab-daily').className = view === 'daily' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
+    document.getElementById('tab-standing').className = view === 'standing' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
+};
 
-    document.getElementById('tab-daily').className = v === 'daily' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
-    document.getElementById('tab-standing').className = v === 'standing' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
-    
-    if (v === 'standing') loadExistingStandingValues();
+window.populateSuppliers = function() {
+    const select = document.getElementById('supplier-select');
+    if(select && !select.innerHTML) select.innerHTML = `<option value="CK">CK</option><option value="DSQK">DSQK</option><option value="GJ">GJ</option>`;
+    loadProducts();
 };
 
 async function loadProducts() {
     const supplier = document.getElementById('supplier-select').value;
     const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
-    
     if (data) {
         activeProducts = data.sort(sortItemsByCustomOrder);
         const dailyList = document.getElementById('product-list');
-        const standingList = document.getElementById('standing-product-list'); 
-        
+        const standingList = document.getElementById('standing-product-list');
         if (dailyList) dailyList.innerHTML = ""; 
         if (standingList) standingList.innerHTML = ""; 
         
@@ -134,90 +157,273 @@ async function loadProducts() {
             let hasAccess = (userRole === 'kitchen');
             if (!hasAccess) {
                 hasAccess = !p.restricted_to || allowed.includes(userVenue);
-                if (!hasAccess && userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ'))) {
-                    hasAccess = true;
-                }
+                if (!hasAccess && userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ'))) hasAccess = true;
             }
-
             if (!hasAccess) return;
-
-            const isLead = LEAD_2_DAY_ITEMS.includes(p.name);
-            const badge = isLead ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase">⚠️ 2-Day Lead</span>` : "";
+            
+            const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
+            const leadBadge = isLeadItem ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase tracking-tighter">⚠️ 2-Day Lead</span>` : "";
 
             const createRow = (prefix) => `
                 <div class="item-row py-4 border-b">
                     <div class="flex justify-between items-center px-2">
-                        <div class="text-left">
-                            <p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p>
-                            ${badge}
-                        </div>
+                        <div class="text-left"><p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p>${leadBadge}<button onclick="toggleNote('${prefix}-${p.name}')" class="text-[9px] font-black text-blue-500 uppercase mt-1">📝 Note</button></div>
                         <div class="flex items-center gap-2">
                             <button type="button" onclick="adjustQty('${prefix}-${p.name}', -1)" class="qty-btn" data-item="${p.name}">-</button>
-                            <input type="number" id="qty-${prefix}-${p.name}" data-name="${p.name}" value="0" class="w-12 h-11 border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
+                            <input type="number" id="qty-${prefix}-${p.name}" oninput="validateChanges()" data-name="${p.name}" value="0" class="w-12 h-11 border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
                             <button type="button" onclick="adjustQty('${prefix}-${p.name}', 1)" class="qty-btn" data-item="${p.name}">+</button>
                         </div>
                     </div>
+                    <input type="text" id="note-${prefix}-${p.name}" oninput="validateChanges()" placeholder="Note..." class="note-input hidden">
                 </div>`;
 
             if (dailyList) dailyList.innerHTML += createRow('daily');
-            if (standingList) standingProductList.innerHTML += createRow('standing');
+            if (standingList) standingList.innerHTML += createRow('standing');
         });
         applyStandingToDaily();
     }
 }
 
-window.adjustQty = function(id, c) {
-    const i = document.getElementById(`qty-${id}`);
-    if (i) { i.value = Math.max(0, (parseInt(i.value) || 0) + c); validateChanges(); }
+window.toggleNote = function(id) {
+    const el = document.getElementById(`note-${id}`);
+    if (el) el.classList.toggle('hidden');
 };
+
+window.adjustQty = function(id, change) {
+    const itemName = id.includes('-') ? id.split('-').slice(1).join('-') : id;
+    if (window.currentUser.role !== 'kitchen' && isItemLocked(itemName)) return;
+    const input = document.getElementById(`qty-${id}`);
+    if (input) {
+        input.value = Math.max(0, (parseInt(input.value) || 0) + change);
+        validateChanges();
+    }
+};
+
+function isItemLocked(itemName) {
+    if (window.currentUser.role === 'kitchen') return false; 
+    const product = activeProducts.find(p => p.name === itemName);
+    if (product && product.supplier === 'GJ') return false; 
+    const dateStr = document.getElementById('delivery-date').value;
+    const now = new Date(); const oDate = new Date(dateStr + "T00:00:00");
+    const today = new Date(); today.setHours(0,0,0,0);
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    if (oDate <= today) return true;
+    if (oDate.getTime() === tomorrow.getTime() && now.getHours() >= 13) return true;
+    return false;
+}
+
+function checkFormLock() {
+    const dateStr = document.getElementById('delivery-date').value;
+    const currentSupplier = document.getElementById('supplier-select').value;
+    const now = new Date(); const orderDate = new Date(dateStr + "T00:00:00");
+    const today = new Date(); today.setHours(0,0,0,0);
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    let isPastCutoff = (orderDate <= today) || (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
+    let locked = isPastCutoff && currentSupplier !== 'GJ' && window.currentUser.role !== 'kitchen';
+
+    const btn = document.getElementById('save-btn'), msg = document.getElementById('lock-msg');
+    if (locked) { if (btn) btn.classList.add('btn-disabled'); if (msg) msg.classList.remove('hidden'); }
+    else { if (btn) btn.classList.remove('btn-disabled'); if (msg) msg.classList.add('hidden'); }
+    
+    activeProducts.forEach(p => {
+        const input = document.getElementById(`qty-daily-${p.name}`);
+        if (input) {
+            if (isItemLocked(p.name)) input.classList.add('locked-qty'); 
+            else input.classList.remove('locked-qty');
+        }
+    });
+}
 
 window.applyStandingToDaily = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr + "T00:00:00").getDay()];
-    
     document.querySelectorAll('#product-list input[type="number"]').forEach(i => i.value = "0");
+    document.querySelectorAll('.note-input').forEach(i => { i.value = ""; i.classList.add('hidden'); });
     const commentBox = document.getElementById('order-comment');
-    if (commentBox) commentBox.value = ""; // Fix for Note staying on other days
-
+    if (commentBox) commentBox.value = "";
+    
     const { data } = await _supabase.from('orders').select('*').eq('venue_id', window.currentUser.venue).eq('delivery_date', dateStr).eq('delivery_slot', slot).maybeSingle();
     currentDBOrder = data;
-
     if (data) {
         data.items.forEach(item => {
             const inp = document.getElementById(`qty-daily-${item.name}`);
-            if (inp) inp.value = item.quantity;
+            if (inp) {
+                inp.value = item.quantity;
+                if (item.comment) { const n = document.getElementById(`note-daily-${item.name}`); n.value = item.comment; n.classList.remove('hidden'); }
+            }
         });
         if (commentBox) commentBox.value = data.comment || "";
     } else {
         const matches = allStandingOrders.filter(s => s.venue_id === window.currentUser.venue && s.days_of_week.includes(targetDay) && s.delivery_slot === slot);
-        matches.forEach(s => { const i = document.getElementById(`qty-daily-${s.item_name}`); if (i) i.value = s.quantity; });
+        matches.forEach(s => { const inp = document.getElementById(`qty-daily-${s.item_name}`); if (inp) inp.value = s.quantity; });
     }
+    captureState(); checkFormLock();
+};
+
+function captureState() {
+    const state = [];
+    document.querySelectorAll('#product-list input').forEach(i => state.push(i.value));
+    const commentBox = document.getElementById('order-comment');
+    if (commentBox) state.push(commentBox.value);
+    initialFormState = JSON.stringify(state);
+    validateChanges();
+}
+
+window.validateChanges = function() {
+    const state = [];
+    document.querySelectorAll('#product-list input').forEach(i => state.push(i.value));
+    const commentBox = document.getElementById('order-comment');
+    if (commentBox) state.push(commentBox.value);
+    const btn = document.getElementById('save-btn');
+    if (!btn) return;
+    if (JSON.stringify(state) !== initialFormState) {
+        btn.classList.remove('btn-disabled');
+        btn.innerText = window.currentUser.role === 'kitchen' ? "Confirm & Save Final Order" : "Save Changes";
+    } else btn.classList.add('btn-disabled');
+};
+
+window.submitOrder = async function() {
+    const dateStr = document.getElementById('delivery-date').value;
+    const slot = document.getElementById('delivery-slot').value;
+    const items = [];
+    document.querySelectorAll('#product-list .item-row').forEach(row => {
+        const inp = row.querySelector('input[type="number"]');
+        if(inp) items.push({ name: inp.dataset.name, quantity: parseInt(inp.value) || 0, comment: row.querySelector('.note-input').value });
+    });
+    const payload = { venue_id: window.currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items, comment: document.getElementById('order-comment').value };
+    if (currentDBOrder) await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id);
+    else await _supabase.from('orders').insert([payload]);
+    alert("Saved!"); applyStandingToDaily();
 };
 
 window.generateConsolidatedReport = async function() {
-    // ... logic remains same as last version including forced CK->DSQK->GJ sequence ...
+    const dateStr = document.getElementById('admin-view-date').value;
+    const targetDateObj = new Date(dateStr + "T00:00:00");
+    const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDateObj.getDay()];
+    const leadDateObj = new Date(targetDateObj); leadDateObj.setDate(leadDateObj.getDate() + 2); 
+    const leadDateStr = leadDateObj.toISOString().split('T')[0];
+    const leadDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][leadDateObj.getDay()];
+
+    const res = document.getElementById('consolidated-results');
+    if (!res) return;
+    res.innerHTML = "LOADING..."; res.classList.remove('hidden');
+
+    try {
+        const { data: allOrders } = await _supabase.from('orders').select('*').in('delivery_date', [dateStr, leadDateStr]);
+        const { data: standings } = await _supabase.from('standing_orders').select('*');
+        const { data: products } = await _supabase.from('products').select('name, supplier');
+        const suppMap = {}; products.forEach(p => suppMap[p.name] = p.supplier || "GENERAL");
+
+        const venueReport = {};
+        const totalPrep = { "Matcha": 0, "Hojicha": 0, "Strawberry Puree": 0 };
+        const leadPrep = {}; 
+        const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ", "DSQK", "CK"];
+        venues.forEach(v => { venueReport[v] = { "1st Delivery": { CK:[], DSQK:[], GJ:[], GENERAL:[], note:"", hasDaily: false }, "2nd Delivery": { CK:[], DSQK:[], GJ:[], GENERAL:[], note:"", hasDaily: false } }; });
+
+        (allOrders || []).forEach(o => {
+            if (o.delivery_date === dateStr && venueReport[o.venue_id]) {
+                const sData = venueReport[o.venue_id][o.delivery_slot];
+                sData.note = o.comment || ""; sData.hasDaily = true;
+                o.items.forEach(i => {
+                    if (i.quantity > 0) {
+                        const s = suppMap[i.name] || "GENERAL";
+                        sData[s].push({ name: i.name, qty: i.quantity, note: i.comment || "" });
+                        if (totalPrep.hasOwnProperty(i.name)) totalPrep[i.name] += i.quantity;
+                    }
+                });
+            }
+            if (o.delivery_date === leadDateStr) {
+                o.items.forEach(i => { if (i.quantity > 0 && LEAD_2_DAY_ITEMS.includes(i.name)) leadPrep[i.name] = (leadPrep[i.name] || 0) + i.quantity; });
+            }
+        });
+
+        standings.forEach(s => {
+            if (s.days_of_week.includes(targetDay) && venueReport[s.venue_id]) {
+                const sData = venueReport[s.venue_id][s.delivery_slot];
+                if (!sData.hasDaily) {
+                    const supp = suppMap[s.item_name] || "GENERAL";
+                    sData[supp].push({ name: s.item_name, qty: s.quantity });
+                    if (totalPrep.hasOwnProperty(s.item_name)) totalPrep[s.item_name] += s.quantity;
+                }
+            }
+            if (s.days_of_week.includes(leadDay) && LEAD_2_DAY_ITEMS.includes(s.item_name)) {
+                const hasDaily = (allOrders || []).some(o => o.delivery_date === leadDateStr && o.venue_id === s.venue_id);
+                if (!hasDaily) leadPrep[s.item_name] = (leadPrep[s.item_name] || 0) + s.quantity;
+            }
+        });
+
+        let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
+        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep (Today)</h2><div class="grid grid-cols-3 gap-4">`;
+        for (const [n, q] of Object.entries(totalPrep)) html += `<div class="bg-white p-2 rounded-xl text-center border border-emerald-100"><p class="text-[9px] font-bold text-slate-400 uppercase">${n}</p><p class="text-lg font-black text-emerald-600">${q}</p></div>`;
+        html += `</div></div>`;
+        if (Object.keys(leadPrep).length > 0) {
+            html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (For ${leadDateStr})</h2>`;
+            for (const [n, q] of Object.entries(leadPrep)) html += `<div class="flex justify-between py-1 border-b border-orange-100 text-xs font-bold uppercase"><span>${n}</span><span>x${q}</span></div>`;
+            html += `</div>`;
+        }
+
+        Object.keys(venueReport).sort().forEach(v => {
+            const vD = venueReport[v];
+            if (["1st Delivery", "2nd Delivery"].some(sl => vD[sl].CK.length > 0 || vD[sl].DSQK.length > 0 || vD[sl].GJ.length > 0 || vD[sl].GENERAL.length > 0 || vD[sl].note)) {
+                html += `<div class="mb-8 p-5 bg-white border-2 border-slate-200 rounded-3xl shadow-sm print:shadow-none print:border-slate-300"><h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-50 pb-1 mb-4 uppercase italic">${v}</h2>`;
+                ["1st Delivery", "2nd Delivery"].forEach(sl => {
+                    const sD = vD[sl];
+                    if (sD.CK.length > 0 || sD.DSQK.length > 0 || sD.GJ.length > 0 || sD.GENERAL.length > 0 || sD.note) {
+                        html += `<div class="mb-6 last:mb-0"><div class="flex justify-between items-center text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-1 border-b border-slate-100">
+                                    <span>${sl}</span>
+                                    ${window.currentUser.role === 'kitchen' ? `<button onclick="editVenueOrder('${v}', '${dateStr}', '${sl}')" class="text-blue-600 underline">✏️ Adjust</button>` : ""}
+                                 </div>`;
+                        ["CK", "DSQK", "GJ", "GENERAL"].forEach(sup => {
+                            if (sD[sup].length > 0) {
+                                const c = sup === 'CK' ? 'text-blue-600' : sup === 'DSQK' ? 'text-orange-600' : 'text-emerald-600';
+                                html += `<div class="mb-3 pl-3 border-l-4 border-slate-100"><p class="text-[9px] font-black uppercase mb-1 ${c}">Supplier: ${sup}</p>`;
+                                sD[sup].sort(sortItemsByCustomOrder).forEach(i => { html += `<div class="flex justify-between items-center py-1 border-b border-slate-50 text-sm font-bold text-slate-700"><div class="flex items-center gap-2"><input type="checkbox" class="w-4 h-4 rounded border-slate-300"><span>${i.name}</span></div><span class="text-blue-900">x${i.qty}</span></div>`; if(i.note) html += `<p class="text-[10px] text-red-500 italic mb-1 ml-6">↳ ${i.note}</p>`; });
+                                html += `</div>`;
+                            }
+                        });
+                        if (sD.note) html += `<div class="mt-2 p-2 bg-yellow-50 rounded-xl text-[10px] text-yellow-800 font-bold border border-yellow-100 italic">Venue Note: ${sD.note}</div>`;
+                        html += `</div>`;
+                    }
+                });
+                html += `</div>`;
+            }
+        });
+        res.innerHTML = html;
+    } catch (e) { console.error(e); res.innerHTML = "Error."; }
 };
 
+window.editVenueOrder = function(v, d, s) {
+    window.currentUser.venue = v; updateOverrideIndicator(v, true);
+    document.getElementById('delivery-date').value = d; document.getElementById('delivery-slot').value = s;
+    window.switchTab('daily'); loadProducts(); 
+};
+
+window.resetToKitchen = function() {
+    window.currentUser.venue = originalKitchenVenue; updateOverrideIndicator(originalKitchenVenue, false);
+    document.getElementById('welcome-msg').innerText = originalKitchenVenue;
+    setTomorrowDate(); loadProducts();
+};
+
+// --- STANDING ORDERS ---
+async function loadStandingOrders() {
+    const { data } = await _supabase.from('standing_orders').select('*');
+    allStandingOrders = data || [];
+}
+
 window.loadExistingStandingValues = function() {
-    // 1. Reset all standing input fields to 0 first
     document.querySelectorAll('[id^="qty-standing-"]').forEach(input => input.value = 0);
-
-    // 2. Identify the venue and current supplier select
     const activeVenue = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
-    const currentSupplier = document.getElementById('supplier-select').value;
-
-    // 3. Filter standing orders for this venue
-    // Note: Since standing orders are day-specific, this usually 
-    // fills based on a "default" or you might want to add a Day selector 
-    // to the standing tab. For now, this clears the error.
-    const venueStandings = allStandingOrders.filter(s => s.venue_id === activeVenue);
-
-    venueStandings.forEach(s => {
+    allStandingOrders.filter(s => s.venue_id === activeVenue).forEach(s => {
         const input = document.getElementById(`qty-standing-${s.item_name}`);
-        if (input) {
-            // This fills the quantity found in the database
-            input.value = s.quantity;
-        }
+        if (input) input.value = s.quantity;
     });
+};
+
+window.exportOrdersToCSV = async function() {
+    const { data } = await _supabase.from('orders').select('*').order('delivery_date', { ascending: false });
+    let csv = "Date,Slot,Venue,Item,Qty,ItemNote,GeneralNote\n";
+    (data || []).forEach(o => { o.items.forEach(i => { csv += `${o.delivery_date},${o.delivery_slot},${o.venue_id},${i.name},${i.quantity},${(i.comment||"").replace(/,/g," ")},${(o.comment||"").replace(/,/g," ")}\n`; }); });
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement("a"); a.href = url; a.download = `Backup_${new Date().toISOString().split('T')[0]}.csv`; a.click();
 };
