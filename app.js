@@ -167,7 +167,10 @@ async function loadProducts() {
     if (data) {
         activeProducts = data.sort(sortItemsByCustomOrder);
         const list = document.getElementById('product-list');
+        const drop = document.getElementById('standing-item'); // IMPORTANT: Keep this
+        
         if (list) list.innerHTML = ""; 
+        if (drop) drop.innerHTML = `<option value="">-- ITEM --</option>`; // IMPORTANT: Keep this
         
         activeProducts.forEach(p => {
             // RULE: GJ only in 2nd Delivery
@@ -176,17 +179,16 @@ async function loadProducts() {
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
             const userVenue = window.currentUser.venue;
 
-            // DSQ Visibility Bridge
+            // STRICT CHECK: Only show if NO restriction OR if user's venue is in the Supabase list
+            // This is where you will add "DSQ, DSQK" in Supabase for Ice
             let hasAccess = !p.restricted_to || allowed.includes(userVenue);
-            if (!hasAccess && (userVenue === 'DSQ' || userVenue === 'DSQK')) {
-                if (allowed.includes('DSQ') || allowed.includes('DSQK')) hasAccess = true;
-            }
 
             if (!hasAccess) return;
 
             const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
             const leadBadge = isLeadItem ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase tracking-tighter">⚠️ 2-Day Lead</span>` : "";
 
+            // 1. Update the Daily Order List
             if (list) {
                 list.innerHTML += `
                     <div class="item-row py-4 border-b">
@@ -205,11 +207,15 @@ async function loadProducts() {
                         <input type="text" id="note-${p.name}" oninput="validateChanges()" placeholder="Note for ${p.name}..." class="note-input">
                     </div>`;
             }
+            
+            // 2. Update the Standing Order Dropdown
+            if (drop) {
+                drop.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+            }
         });
         applyStandingToDaily();
     }
 }
-
 window.toggleNote = function(name) {
     const el = document.getElementById(`note-${name}`);
     if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
