@@ -6,7 +6,7 @@ const USERS = [
     { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'venue' },
     { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'venue' },
     { id: 'wsqstaff', pw: 'wsqstaff', venue: 'WSQ', role: 'venue' },
-    { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQK', role: 'venue' }, // Matches DSQK database label
+    { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'venue' }, // Change venue back to DSQ
     { id: 'gjstaff', pw: 'gjstaff', venue: 'GJ', role: 'venue' },
     { id: 'dsqkmanager', pw: 'dsqkmanager', venue: 'DSQK', role: 'kitchen' },
     { id: 'ckmanager', pw: 'ckmanager', venue: 'CK', role: 'kitchen' }
