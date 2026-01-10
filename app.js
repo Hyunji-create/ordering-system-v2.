@@ -198,3 +198,26 @@ window.applyStandingToDaily = async function() {
 window.generateConsolidatedReport = async function() {
     // ... logic remains same as last version including forced CK->DSQK->GJ sequence ...
 };
+
+window.loadExistingStandingValues = function() {
+    // 1. Reset all standing input fields to 0 first
+    document.querySelectorAll('[id^="qty-standing-"]').forEach(input => input.value = 0);
+
+    // 2. Identify the venue and current supplier select
+    const activeVenue = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
+    const currentSupplier = document.getElementById('supplier-select').value;
+
+    // 3. Filter standing orders for this venue
+    // Note: Since standing orders are day-specific, this usually 
+    // fills based on a "default" or you might want to add a Day selector 
+    // to the standing tab. For now, this clears the error.
+    const venueStandings = allStandingOrders.filter(s => s.venue_id === activeVenue);
+
+    venueStandings.forEach(s => {
+        const input = document.getElementById(`qty-standing-${s.item_name}`);
+        if (input) {
+            // This fills the quantity found in the database
+            input.value = s.quantity;
+        }
+    });
+};
