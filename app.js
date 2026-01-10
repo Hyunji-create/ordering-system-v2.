@@ -6,7 +6,7 @@ const USERS = [
     { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'venue' },
     { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'venue' },
     { id: 'wsqstaff', pw: 'wsqstaff', venue: 'WSQ', role: 'venue' },
-    { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'venue' }, // Change venue back to DSQ
+    { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'venue' }, 
     { id: 'gjstaff', pw: 'gjstaff', venue: 'GJ', role: 'venue' },
     { id: 'dsqkmanager', pw: 'dsqkmanager', venue: 'DSQK', role: 'kitchen' },
     { id: 'ckmanager', pw: 'ckmanager', venue: 'CK', role: 'kitchen' }
@@ -115,49 +115,55 @@ window.switchTab = function(view) {
     document.getElementById('tab-standing').className = view === 'standing' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
 };
 
-activeProducts.forEach(p => {
-    // 1. Get the list of allowed venues from Supabase
-    const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
+async function loadProducts() {
+    const supplierSelect = document.getElementById('supplier-select');
+    if (!supplierSelect) return;
+    const supplier = supplierSelect.value;
+    const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
     
-    // 2. The "DSQ Bridge" Logic
-    if (p.restricted_to) {
-        const userVenue = window.currentUser.venue;
+    if (data) {
+        activeProducts = data.sort(sortItemsByCustomOrder);
+        const list = document.getElementById('product-list');
+        const drop = document.getElementById('standing-item');
+        if (list) list.innerHTML = ""; 
+        if (drop) drop.innerHTML = `<option value="">-- ITEM --</option>`;
         
-        // Check for an exact match (e.g., WSQ user vs WSQ restriction)
-        let hasAccess = allowed.includes(userVenue);
-        
-        // Special Case: Allow DSQ and DSQK to see each other's restricted items
-        if ((userVenue === 'DSQ' || userVenue === 'DSQK') && 
-            (allowed.includes('DSQ') || allowed.includes('DSQK'))) {
-            hasAccess = true;
-        }
+        activeProducts.forEach(p => {
+            const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
+            const userVenue = window.currentUser.venue;
 
-        if (!hasAccess) return; // Stop here and hide the item if no match
-    }
-    
-    // 3. Render the items (The rest of your code remains the same)
-    const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
-    const leadBadge = isLeadItem ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase tracking-tighter">⚠️ 2-Day Lead</span>` : "";
+            if (p.restricted_to) {
+                let hasAccess = allowed.includes(userVenue);
+                if ((userVenue === 'DSQ' || userVenue === 'DSQK') && 
+                    (allowed.includes('DSQ') || allowed.includes('DSQK'))) {
+                    hasAccess = true;
+                }
+                if (!hasAccess) return;
+            }
 
-    if (list) {
-        list.innerHTML += `
-            <div class="item-row py-4 border-b">
-                <div class="flex justify-between items-center px-2">
-                    <div class="text-left">
-                        <p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p>
-                        ${leadBadge}
-                        <button onclick="toggleNote('${p.name}')" class="text-[9px] font-black text-blue-500 uppercase mt-1">📝 Note</button>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button type="button" onclick="adjustQty('${p.name}', -1)" class="qty-btn" data-item="${p.name}">-</button>
-                        <input type="number" id="qty-${p.name}" oninput="validateChanges()" data-name="${p.name}" value="0" inputmode="numeric" pattern="[0-9]*" class="w-12 h-11 bg-white border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
-                        <button type="button" onclick="adjustQty('${p.name}', 1)" class="qty-btn" data-item="${p.name}">+</button>
-                    </div>
-                </div>
-                <input type="text" id="note-${p.name}" oninput="validateChanges()" placeholder="Note for ${p.name}..." class="note-input">
-            </div>`;
-    }
-});
+            const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
+            const leadBadge = isLeadItem ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase tracking-tighter">⚠️ 2-Day Lead</span>` : "";
+
+            if (list) {
+                list.innerHTML += `
+                    <div class="item-row py-4 border-b">
+                        <div class="flex justify-between items-center px-2">
+                            <div class="text-left">
+                                <p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p>
+                                ${leadBadge}
+                                <button onclick="toggleNote('${p.name}')" class="text-[9px] font-black text-blue-500 uppercase mt-1">📝 Note</button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="adjustQty('${p.name}', -1)" class="qty-btn" data-item="${p.name}">-</button>
+                                <input type="number" id="qty-${p.name}" oninput="validateChanges()" data-name="${p.name}" value="0" inputmode="numeric" pattern="[0-9]*" class="w-12 h-11 bg-white border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
+                                <button type="button" onclick="adjustQty('${p.name}', 1)" class="qty-btn" data-item="${p.name}">+</button>
+                            </div>
+                        </div>
+                        <input type="text" id="note-${p.name}" oninput="validateChanges()" placeholder="Note for ${p.name}..." class="note-input">
+                    </div>`;
+            }
+            if (drop) drop.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+        });
         applyStandingToDaily();
     }
 }
@@ -338,7 +344,7 @@ window.generateConsolidatedReport = async function() {
         });
 
         const venueReport = {};
-        const venues = ["WYN", "MCC", "WSQ", "GJ", "DSQK", "CK"];
+        const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ", "DSQK", "CK"];
         
         venues.forEach(v => {
             venueReport[v] = { 
