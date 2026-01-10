@@ -139,16 +139,15 @@ async function loadProducts() {
         if (drop) drop.innerHTML = `<option value="">-- ITEM --</option>`;
         
         activeProducts.forEach(p => {
-            // Trim whitespace from restrictions to prevent matching errors
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
             const userVenue = window.currentUser.venue;
 
-            // Visibility Logic
-            if (p.restricted_to && !allowed.includes(userVenue)) {
-                // Bridge Case: Allow DSQK to see DSQ and vice-versa
-                const isDSQPair = (userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ')));
-                if (!isDSQPair) return;
+            let hasAccess = !p.restricted_to || allowed.includes(userVenue);
+            if (!hasAccess && (userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ')))) {
+                hasAccess = true;
             }
+
+            if (!hasAccess) return;
 
             const isLead = LEAD_2_DAY_ITEMS.includes(p.name);
             const badge = isLead ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase">⚠️ 2-Day Lead</span>` : "";
@@ -222,16 +221,23 @@ window.applyStandingToDaily = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr + "T00:00:00").getDay()];
+    
     document.querySelectorAll('#product-list input[type="number"]').forEach(i => i.value = "0");
     document.querySelectorAll('.note-input').forEach(i => { i.value = ""; i.style.display = 'none'; });
+    
+    // UI RESET: Clear note box immediately before loading new day data
+    const commentBox = document.getElementById('order-comment');
+    if (commentBox) commentBox.value = "";
+
     const { data } = await _supabase.from('orders').select('*').eq('venue_id', window.currentUser.venue).eq('delivery_date', dateStr).eq('delivery_slot', slot).maybeSingle();
     currentDBOrder = data;
+
     if (data) {
         data.items.forEach(item => {
             const inp = document.getElementById(`qty-${item.name}`);
             if (inp) { inp.value = item.quantity; if (item.comment) { const n = document.getElementById(`note-${item.name}`); n.value = item.comment; n.style.display = 'block'; } }
         });
-        document.getElementById('order-comment').value = data.comment || "";
+        if (commentBox) commentBox.value = data.comment || "";
     } else {
         const matches = allStandingOrders.filter(s => s.venue_id === window.currentUser.venue && s.days_of_week.includes(targetDay) && s.delivery_slot === slot);
         matches.forEach(s => { const i = document.getElementById(`qty-${s.item_name}`); if (i) i.value = s.quantity; });
@@ -242,7 +248,8 @@ window.applyStandingToDaily = async function() {
 function captureState() {
     const state = [];
     document.querySelectorAll('#product-list input').forEach(i => state.push(i.value));
-    state.push(document.getElementById('order-comment').value);
+    const commentBox = document.getElementById('order-comment');
+    if (commentBox) state.push(commentBox.value);
     initialFormState = JSON.stringify(state);
     validateChanges();
 }
@@ -250,7 +257,8 @@ function captureState() {
 window.validateChanges = function() {
     const state = [];
     document.querySelectorAll('#product-list input').forEach(i => state.push(i.value));
-    state.push(document.getElementById('order-comment').value);
+    const commentBox = document.getElementById('order-comment');
+    if (commentBox) state.push(commentBox.value);
     const btn = document.getElementById('save-btn');
     if (JSON.stringify(state) !== initialFormState) btn.classList.remove('btn-disabled'); else btn.classList.add('btn-disabled');
 };
@@ -274,7 +282,6 @@ window.generateConsolidatedReport = async function() {
     const targetDateObj = new Date(dateStr + "T00:00:00");
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDateObj.getDay()];
     
-    // FIX: Advance Prep looks 2 days ahead
     const leadDateObj = new Date(targetDateObj); leadDateObj.setDate(leadDateObj.getDate() + 2); 
     const leadDateStr = leadDateObj.toISOString().split('T')[0];
     const leadDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][leadDateObj.getDay()];
@@ -295,11 +302,12 @@ window.generateConsolidatedReport = async function() {
         const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ", "DSQK", "CK"];
         venues.forEach(v => { venueReport[v] = { "1st Delivery": { CK:[], DSQK:[], GJ:[], GENERAL:[], note:"", hasDaily: false }, "2nd Delivery": { CK:[], DSQK:[], GJ:[], GENERAL:[], note:"", hasDaily: false } }; });
 
-        // 1. Process Daily Orders
+        // 1. Daily Orders (Priority)
         (allOrders || []).forEach(o => {
             if (o.delivery_date === dateStr && venueReport[o.venue_id]) {
                 const sData = venueReport[o.venue_id][o.delivery_slot];
-                sData.note = o.comment || ""; sData.hasDaily = true;
+                sData.note = o.comment || ""; // Fix: Loads General Venue Note from DB
+                sData.hasDaily = true;
                 o.items.forEach(i => {
                     if (i.quantity > 0) {
                         const s = suppMap[i.name] || "GENERAL";
@@ -313,7 +321,7 @@ window.generateConsolidatedReport = async function() {
             }
         });
 
-        // 2. Process Standing Orders
+        // 2. Standing Orders (Fallback)
         standings.forEach(s => {
             if (s.days_of_week.includes(targetDay) && venueReport[s.venue_id]) {
                 const sData = venueReport[s.venue_id][s.delivery_slot];
@@ -330,46 +338,41 @@ window.generateConsolidatedReport = async function() {
         });
 
         let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black text-slate-800"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
-        
-        // Immediate Prep
         html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white print:border-slate-300"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep (Today)</h2><div class="grid grid-cols-3 gap-4">`;
         for (const [n, q] of Object.entries(totalPrep)) html += `<div class="bg-white p-2 rounded-xl text-center border border-emerald-100"><p class="text-[9px] font-bold text-slate-400 uppercase">${n}</p><p class="text-lg font-black text-emerald-600">${q}</p></div>`;
         html += `</div></div>`;
 
-        // FIXED: Advance Prep names display corrected here
         if (Object.keys(leadPrep).length > 0) {
-            html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (For delivery on ${leadDateStr})</h2>`;
+            html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (Orders for ${leadDateStr})</h2>`;
             for (const [n, q] of Object.entries(leadPrep)) {
                 html += `<div class="flex justify-between py-1 border-b border-orange-100 text-xs font-bold uppercase"><span>${n}</span><span>x${q}</span></div>`;
             }
-            html += `<p class="text-[8px] text-orange-400 mt-2 italic font-black uppercase">* 48h Lead Time items. Start today for delivery in 2 days.</p></div>`;
+            html += `<p class="text-[8px] text-orange-400 mt-2 italic font-black uppercase">* 48h Lead Time items.</p></div>`;
         }
 
-        // Venue Breakdown
         Object.keys(venueReport).sort().forEach(v => {
             const vD = venueReport[v];
             if (["1st Delivery", "2nd Delivery"].some(sl => vD[sl].CK.length > 0 || vD[sl].DSQK.length > 0 || vD[sl].GJ.length > 0 || vD[sl].GENERAL.length > 0 || vD[sl].note)) {
-                html += `<div class="mb-8 p-5 bg-white border-2 border-slate-200 rounded-3xl shadow-sm print:shadow-none print:border-slate-300">
-                            <h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-50 pb-1 mb-4 uppercase italic">${v}</h2>`;
+                html += `<div class="mb-8 p-5 bg-white border-2 border-slate-200 rounded-3xl shadow-sm print:shadow-none print:border-slate-300"><h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-50 pb-1 mb-4 uppercase italic">${v}</h2>`;
                 ["1st Delivery", "2nd Delivery"].forEach(sl => {
                     const sD = vD[sl];
                     if (sD.CK.length > 0 || sD.DSQK.length > 0 || sD.GJ.length > 0 || sD.GENERAL.length > 0 || sD.note) {
                         html += `<div class="mb-6 last:mb-0"><div class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-1 border-b border-slate-100">${sl}</div>`;
+                        
+                        // FORCED SEQUENCE: CK -> DSQK -> GJ
                         ["CK", "DSQK", "GJ", "GENERAL"].forEach(sup => {
                             if (sD[sup].length > 0) {
                                 const c = sup === 'CK' ? 'text-blue-600' : sup === 'DSQK' ? 'text-orange-600' : 'text-emerald-600';
                                 html += `<div class="mb-3 pl-3 border-l-4 border-slate-100"><p class="text-[9px] font-black uppercase mb-1 ${c}">Supplier: ${sup}</p>`;
                                 sD[sup].forEach(i => { 
-                                    html += `<div class="flex justify-between items-center py-1 border-b border-slate-50 text-sm font-bold text-slate-700">
-                                                <div class="flex items-center gap-2"><input type="checkbox" class="w-4 h-4 rounded border-slate-300"><span>${i.name}</span></div>
-                                                <span class="text-blue-900">x${i.qty}</span>
-                                             </div>`; 
+                                    html += `<div class="flex justify-between items-center py-1 border-b border-slate-50 text-sm font-bold text-slate-700"><div class="flex items-center gap-2"><input type="checkbox" class="w-4 h-4 rounded border-slate-300"><span>${i.name}</span></div><span class="text-blue-900">x${i.qty}</span></div>`; 
                                     if(i.note) html += `<p class="text-[10px] text-red-500 italic mb-1 ml-6">↳ ${i.note}</p>`; 
                                 });
                                 html += `</div>`;
                             }
                         });
-                        if (sD.note) html += `<div class="mt-2 p-2 bg-yellow-50 rounded-xl text-[10px] text-yellow-800 font-bold border border-yellow-100 italic">Note: ${sD.note}</div>`;
+                        // Note Display inside Delivery run box
+                        if (sD.note) html += `<div class="mt-2 p-2 bg-yellow-50 rounded-xl text-[10px] text-yellow-800 font-bold border border-yellow-100 italic">Venue Note: ${sD.note}</div>`;
                         html += `</div>`;
                     }
                 });
@@ -380,7 +383,6 @@ window.generateConsolidatedReport = async function() {
     } catch (e) { console.error(e); res.innerHTML = "Error."; }
 };
 
-// ... Remaining helper functions (switchTab, resetToKitchen, export, etc.) remain unchanged from your current script ...
 window.editVenueOrder = function(v, d, s) {
     window.currentUser.venue = v; updateOverrideIndicator(v, true);
     document.getElementById('delivery-date').value = d; document.getElementById('delivery-slot').value = s;
@@ -425,7 +427,7 @@ window.addStandingOrder = async function() {
     const qI = document.getElementById('standing-qty'); const q = parseInt(qI.value);
     const days = Array.from(document.querySelectorAll('.day-active')).map(b => b.dataset.day);
     if (!i || isNaN(q) || days.length === 0) return alert("Fill all info.");
-    const targetV = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
+    const targetV = (window.currentUser.role === 'kitchen' && originalKitchenVenue) ? originalKitchenVenue : window.currentUser.venue;
     await _supabase.from('standing_orders').insert([{ venue_id: targetV, item_name: i, quantity: q, delivery_slot: sl, days_of_week: days.join(', ') }]);
     alert("Saved!"); qI.value = ""; document.querySelectorAll('.day-active').forEach(b => b.classList.remove('day-active')); loadStandingOrders();
 };
