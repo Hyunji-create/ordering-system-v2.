@@ -407,6 +407,7 @@ window.generateConsolidatedReport = async function() {
         });
 
         const venueReport = {};
+        const totalPrep = {}; // <--- NEW: To track grand totals
         const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ", "DSQK", "CK"];
         
         venues.forEach(v => {
@@ -416,26 +417,36 @@ window.generateConsolidatedReport = async function() {
             };
         });
 
+        // Function to helper tally totals
+        const addToTotal = (name, qty) => {
+            totalPrep[name] = (totalPrep[name] || 0) + qty;
+        };
+
         (standings || []).forEach(s => {
             if(s.days_of_week && s.days_of_week.includes(targetDay)) {
                 let supp = supplierMap[s.item_name] || "GENERAL";
                 if(venueReport[s.venue_id]) {
                     const slot = venueReport[s.venue_id][s.delivery_slot];
-                    if (slot && slot[supp]) slot[supp].push({ name: s.item_name, qty: s.quantity });
+                    if (slot && slot[supp]) {
+                        slot[supp].push({ name: s.item_name, qty: s.quantity });
+                        addToTotal(s.item_name, s.quantity); // Tally Total
+                    }
                 }
             }
         });
 
         (oneOffs || []).forEach(o => {
             if(venueReport[o.venue_id]) {
-                venueReport[o.venue_id][o.delivery_slot] = { CK: [], DSQK: [], GJ: [], GENERAL: [], note: o.comment || "" };
+                venueReport[o.venue_id][o.delivery_slot].note = o.comment || "";
                 o.items.forEach(i => {
-                    if (i.quantity > 0) {
+                    const q = i.qty || i.quantity || 0;
+                    if (q > 0) {
                         let supp = supplierMap[i.name] || "GENERAL";
                         const slot = venueReport[o.venue_id][o.delivery_slot];
                         if (slot) {
                             const targetBucket = slot[supp] ? slot[supp] : slot["GENERAL"];
-                            targetBucket.push({ name: i.name, qty: i.qty || i.quantity, note: i.comment || "" });
+                            targetBucket.push({ name: i.name, qty: q, note: i.comment || "" });
+                            addToTotal(i.name, q); // Tally Total
                         }
                     }
                 });
@@ -444,6 +455,24 @@ window.generateConsolidatedReport = async function() {
 
         let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black text-slate-800"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
 
+        // --- NEW: TOTAL PREP SUMMARY SECTION ---
+        if (Object.keys(totalPrep).length > 0) {
+            html += `<div class="mb-8 p-6 bg-blue-50 border-2 border-blue-200 rounded-3xl shadow-sm">
+                <h2 class="text-xl font-black text-blue-800 uppercase italic mb-4 flex items-center gap-2">👨‍🍳 Total Kitchen Prep</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">`;
+            
+            // Sort totals by our custom PRODUCT_ORDER sequence
+            Object.keys(totalPrep).sort((a,b) => {
+                let idxA = PRODUCT_ORDER.indexOf(a);
+                let idxB = PRODUCT_ORDER.indexOf(b);
+                return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+            }).forEach(name => {
+                html += `<div class="flex justify-between py-1 border-b border-blue-100"><span class="font-bold text-slate-700 uppercase text-xs">${name}</span><span class="font-black text-blue-700">x${totalPrep[name]}</span></div>`;
+            });
+            html += `</div></div>`;
+        }
+
+        // --- VENUE BREAKDOWN SECTION ---
         Object.keys(venueReport).sort().forEach(v => {
             const vData = venueReport[v];
             const hasData = ["1st Delivery", "2nd Delivery"].some(slot => {
