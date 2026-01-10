@@ -82,6 +82,15 @@ async function checkMaintenanceMode() {
 }
 
 window.toggleMaintenance = async function() {
+    // 1. Ask for password before doing anything
+    const confirmPw = prompt("Enter Admin Password to toggle Maintenance Mode:");
+    
+    if (confirmPw !== '1019') {
+        alert("Incorrect password. Action cancelled.");
+        return;
+    }
+
+    // 2. If password is correct, proceed with the toggle logic
     const { data: currentData } = await _supabase.from('app_settings').select('setting_value').eq('setting_key', 'maintenance_mode').single();
     const currentStatus = currentData.setting_value === 'true';
     const newStatus = !currentStatus;
@@ -94,6 +103,8 @@ window.toggleMaintenance = async function() {
     if (!error) {
         alert("Maintenance Mode: " + (newStatus ? "ENABLED" : "DISABLED"));
         location.reload();
+    } else {
+        alert("Error updating status: " + error.message);
     }
 };
 
