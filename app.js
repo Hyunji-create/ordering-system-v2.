@@ -4,6 +4,7 @@ const PRODUCT_ORDER = [
     "Vanilla Syrup", "Simple Syrup", "Toastie-Beef", "Toastie-Ham&Cheese", "Toastie-Curry", "Ice",
     "Banana Bread", "Yuzu Curd", "Cookie", "Yuzu Juice", "Diced Strawberry", "Granola"
 ];
+const LEAD_2_DAY_ITEMS = ["Vanilla Syrup", "Simple Syrup", "Yuzu Juice"];
 
 const USERS = [
     { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'venue' },
@@ -126,6 +127,8 @@ function setTomorrowDate() {
 window.switchTab = function(v) {
     document.getElementById('view-daily').classList.toggle('hidden', v !== 'daily');
     document.getElementById('view-standing').classList.toggle('hidden', v !== 'standing');
+    const header = document.querySelector('.bg-white.p-6.rounded-3xl.shadow-sm.mb-6');
+    if (header) header.classList.remove('hidden');
     document.getElementById('tab-daily').className = v === 'daily' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
     document.getElementById('tab-standing').className = v === 'standing' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
 };
@@ -133,28 +136,24 @@ window.switchTab = function(v) {
 async function loadProducts() {
     const supplier = document.getElementById('supplier-select').value;
     const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
-    
     if (data) {
         activeProducts = data.sort(sortItemsByCustomOrder);
         const list = document.getElementById('product-list');
         const drop = document.getElementById('standing-item');
         if (list) list.innerHTML = ""; 
         if (drop) drop.innerHTML = `<option value="">-- ITEM --</option>`;
-        
         activeProducts.forEach(p => {
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
             const userVenue = window.currentUser.venue;
-
-            let hasAccess = !p.restricted_to || allowed.includes(userVenue);
-            if (!hasAccess && (userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ')))) {
-                hasAccess = true;
+            const userRole = window.currentUser.role;
+            let hasAccess = (userRole === 'kitchen');
+            if (!hasAccess) {
+                hasAccess = !p.restricted_to || allowed.includes(userVenue);
+                if (!hasAccess && userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ'))) hasAccess = true;
             }
-
             if (!hasAccess) return;
-
             const isLead = LEAD_2_DAY_ITEMS.includes(p.name);
             const badge = isLead ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase">⚠️ 2-Day Lead</span>` : "";
-
             if (list) {
                 list.innerHTML += `<div class="item-row py-4 border-b">
                     <div class="flex justify-between items-center px-2">
@@ -180,6 +179,7 @@ window.toggleNote = function(n) {
 };
 
 window.adjustQty = function(n, c) {
+    // MANAGER BYPASS: If role is kitchen, they can always adjust
     if (window.currentUser.role !== 'kitchen' && isItemLocked(n)) return;
     const i = document.getElementById(`qty-${n}`);
     if (i) { i.value = Math.max(0, (parseInt(i.value) || 0) + c); validateChanges(); }
@@ -210,13 +210,32 @@ function checkFormLock() {
     const today = new Date(); today.setHours(0,0,0,0);
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
     let isPast = (oDate <= today) || (oDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
-    let locked = isPast && supp !== 'GJ';
-    const btn = document.getElementById('save-btn');
-    if (locked && window.currentUser.role !== 'kitchen') btn.classList.add('btn-disabled'); 
-    else btn.classList.remove('btn-disabled');
+    
+    // MANAGER BYPASS: Only venues see the lock message or disabled save button
+    let locked = isPast && supp !== 'GJ' && window.currentUser.role !== 'kitchen';
+    const btn = document.getElementById('save-btn'), msg = document.getElementById('lock-msg');
+    
+    if (locked) {
+        if (btn) btn.classList.add('btn-disabled');
+        if (msg) msg.classList.remove('hidden');
+    } else {
+        if (btn) btn.classList.remove('btn-disabled');
+        if (msg) msg.classList.add('hidden');
+    }
+    
     activeProducts.forEach(p => {
         const input = document.getElementById(`qty-${p.name}`);
-        if (input) isItemLocked(p.name) ? input.classList.add('locked-qty') : input.classList.remove('locked-qty');
+        const btns = document.querySelectorAll(`button[data-item="${p.name}"]`);
+        if (input) {
+            // Managers never see the locked visual style
+            if (isItemLocked(p.name) && window.currentUser.role !== 'kitchen') {
+                input.classList.add('locked-qty');
+                btns.forEach(b => b.classList.add('opacity-30', 'pointer-events-none'));
+            } else {
+                input.classList.remove('locked-qty');
+                btns.forEach(b => b.classList.remove('opacity-30', 'pointer-events-none'));
+            }
+        }
     });
 }
 
@@ -224,17 +243,12 @@ window.applyStandingToDaily = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dateStr + "T00:00:00").getDay()];
-    
     document.querySelectorAll('#product-list input[type="number"]').forEach(i => i.value = "0");
     document.querySelectorAll('.note-input').forEach(i => { i.value = ""; i.style.display = 'none'; });
-    
-    // UI RESET: Clear note box immediately before loading new day data
     const commentBox = document.getElementById('order-comment');
     if (commentBox) commentBox.value = "";
-
     const { data } = await _supabase.from('orders').select('*').eq('venue_id', window.currentUser.venue).eq('delivery_date', dateStr).eq('delivery_slot', slot).maybeSingle();
     currentDBOrder = data;
-
     if (data) {
         data.items.forEach(item => {
             const inp = document.getElementById(`qty-${item.name}`);
@@ -263,7 +277,14 @@ window.validateChanges = function() {
     const commentBox = document.getElementById('order-comment');
     if (commentBox) state.push(commentBox.value);
     const btn = document.getElementById('save-btn');
-    if (JSON.stringify(state) !== initialFormState) btn.classList.remove('btn-disabled'); else btn.classList.add('btn-disabled');
+    if (JSON.stringify(state) !== initialFormState) {
+        btn.classList.remove('btn-disabled');
+        // Change text for kitchen managers to emphasize override
+        if (window.currentUser.role === 'kitchen') btn.innerText = "Confirm & Save Final Order";
+        else btn.innerText = "Save Changes";
+    } else {
+        btn.classList.add('btn-disabled');
+    }
 };
 
 window.submitOrder = async function() {
@@ -277,40 +298,33 @@ window.submitOrder = async function() {
     const payload = { venue_id: window.currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items, comment: document.getElementById('order-comment').value };
     if (currentDBOrder) await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id);
     else await _supabase.from('orders').insert([payload]);
-    alert("Saved!"); applyStandingToDaily();
+    alert("Success: Quantities updated!"); applyStandingToDaily();
 };
 
 window.generateConsolidatedReport = async function() {
     const dateStr = document.getElementById('admin-view-date').value;
     const targetDateObj = new Date(dateStr + "T00:00:00");
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDateObj.getDay()];
-    
     const leadDateObj = new Date(targetDateObj); leadDateObj.setDate(leadDateObj.getDate() + 2); 
     const leadDateStr = leadDateObj.toISOString().split('T')[0];
     const leadDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][leadDateObj.getDay()];
-
     const res = document.getElementById('consolidated-results');
     if (!res) return;
     res.innerHTML = "LOADING..."; res.classList.remove('hidden');
-
     try {
         const { data: allOrders } = await _supabase.from('orders').select('*').in('delivery_date', [dateStr, leadDateStr]);
         const { data: standings } = await _supabase.from('standing_orders').select('*');
         const { data: products } = await _supabase.from('products').select('name, supplier');
         const suppMap = {}; products.forEach(p => suppMap[p.name] = p.supplier || "GENERAL");
-
         const venueReport = {};
         const totalPrep = { "Matcha": 0, "Hojicha": 0, "Strawberry Puree": 0 };
         const leadPrep = {}; 
         const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ", "DSQK", "CK"];
         venues.forEach(v => { venueReport[v] = { "1st Delivery": { CK:[], DSQK:[], GJ:[], GENERAL:[], note:"", hasDaily: false }, "2nd Delivery": { CK:[], DSQK:[], GJ:[], GENERAL:[], note:"", hasDaily: false } }; });
-
-        // 1. Daily Orders (Priority)
         (allOrders || []).forEach(o => {
             if (o.delivery_date === dateStr && venueReport[o.venue_id]) {
                 const sData = venueReport[o.venue_id][o.delivery_slot];
-                sData.note = o.comment || ""; // Fix: Loads General Venue Note from DB
-                sData.hasDaily = true;
+                sData.note = o.comment || ""; sData.hasDaily = true;
                 o.items.forEach(i => {
                     if (i.quantity > 0) {
                         const s = suppMap[i.name] || "GENERAL";
@@ -323,8 +337,6 @@ window.generateConsolidatedReport = async function() {
                 o.items.forEach(i => { if (i.quantity > 0 && LEAD_2_DAY_ITEMS.includes(i.name)) leadPrep[i.name] = (leadPrep[i.name] || 0) + i.quantity; });
             }
         });
-
-        // 2. Standing Orders (Fallback)
         standings.forEach(s => {
             if (s.days_of_week.includes(targetDay) && venueReport[s.venue_id]) {
                 const sData = venueReport[s.venue_id][s.delivery_slot];
@@ -339,20 +351,17 @@ window.generateConsolidatedReport = async function() {
                 if (!venueHasDailyOnPrep) leadPrep[s.item_name] = (leadPrep[s.item_name] || 0) + s.quantity;
             }
         });
-
         let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black text-slate-800"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
         html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white print:border-slate-300"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep (Today)</h2><div class="grid grid-cols-3 gap-4">`;
         for (const [n, q] of Object.entries(totalPrep)) html += `<div class="bg-white p-2 rounded-xl text-center border border-emerald-100"><p class="text-[9px] font-bold text-slate-400 uppercase">${n}</p><p class="text-lg font-black text-emerald-600">${q}</p></div>`;
         html += `</div></div>`;
-
         if (Object.keys(leadPrep).length > 0) {
-            html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (Orders for ${leadDateStr})</h2>`;
+            html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (For delivery on ${leadDateStr})</h2>`;
             for (const [n, q] of Object.entries(leadPrep)) {
                 html += `<div class="flex justify-between py-1 border-b border-orange-100 text-xs font-bold uppercase"><span>${n}</span><span>x${q}</span></div>`;
             }
             html += `<p class="text-[8px] text-orange-400 mt-2 italic font-black uppercase">* 48h Lead Time items.</p></div>`;
         }
-
         Object.keys(venueReport).sort().forEach(v => {
             const vD = venueReport[v];
             if (["1st Delivery", "2nd Delivery"].some(sl => vD[sl].CK.length > 0 || vD[sl].DSQK.length > 0 || vD[sl].GJ.length > 0 || vD[sl].GENERAL.length > 0 || vD[sl].note)) {
@@ -361,20 +370,17 @@ window.generateConsolidatedReport = async function() {
                     const sD = vD[sl];
                     if (sD.CK.length > 0 || sD.DSQK.length > 0 || sD.GJ.length > 0 || sD.GENERAL.length > 0 || sD.note) {
                         html += `<div class="mb-6 last:mb-0"><div class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-1 border-b border-slate-100">${sl}</div>`;
-                        
-                        // FORCED SEQUENCE: CK -> DSQK -> GJ
                         ["CK", "DSQK", "GJ", "GENERAL"].forEach(sup => {
                             if (sD[sup].length > 0) {
                                 const c = sup === 'CK' ? 'text-blue-600' : sup === 'DSQK' ? 'text-orange-600' : 'text-emerald-600';
                                 html += `<div class="mb-3 pl-3 border-l-4 border-slate-100"><p class="text-[9px] font-black uppercase mb-1 ${c}">Supplier: ${sup}</p>`;
-                                sD[sup].forEach(i => { 
+                                sD[sup].sort(sortItemsByCustomOrder).forEach(i => { 
                                     html += `<div class="flex justify-between items-center py-1 border-b border-slate-50 text-sm font-bold text-slate-700"><div class="flex items-center gap-2"><input type="checkbox" class="w-4 h-4 rounded border-slate-300"><span>${i.name}</span></div><span class="text-blue-900">x${i.qty}</span></div>`; 
                                     if(i.note) html += `<p class="text-[10px] text-red-500 italic mb-1 ml-6">↳ ${i.note}</p>`; 
                                 });
                                 html += `</div>`;
                             }
                         });
-                        // Note Display inside Delivery run box
                         if (sD.note) html += `<div class="mt-2 p-2 bg-yellow-50 rounded-xl text-[10px] text-yellow-800 font-bold border border-yellow-100 italic">Venue Note: ${sD.note}</div>`;
                         html += `</div>`;
                     }
