@@ -133,12 +133,9 @@ async function loadProducts() {
             const userVenue = window.currentUser.venue;
 
             if (p.restricted_to) {
-                let hasAccess = allowed.includes(userVenue);
-                if ((userVenue === 'DSQ' || userVenue === 'DSQK') && 
-                    (allowed.includes('DSQ') || allowed.includes('DSQK'))) {
-                    hasAccess = true;
-                }
-                if (!hasAccess) return;
+                const userVenue = window.currentUser.venue;
+                // Only allow access if the user's venue is explicitly in the allowed list
+                if (!allowed.includes(userVenue)) return;
             }
 
             const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
