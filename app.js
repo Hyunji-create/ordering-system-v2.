@@ -25,7 +25,7 @@ window.onload = function() {
         window.currentUser = JSON.parse(savedUser);
         if (window.currentUser.role === 'kitchen') originalKitchenVenue = window.currentUser.venue;
         showDashboard();
-        checkMaintenanceMode(); // Check status on load
+        checkMaintenanceMode(); 
     }
 };
 
@@ -64,14 +64,12 @@ async function checkMaintenanceMode() {
     const { data } = await _supabase.from('app_settings').select('setting_value').eq('setting_key', 'maintenance_mode').single();
     const isMaint = data && data.setting_value === 'true';
 
-    // Show/Hide the control button only for ckmanager
     const maintBtn = document.getElementById('maint-toggle-btn');
     if (maintBtn && window.currentUser.id === 'ckmanager') {
         maintBtn.classList.remove('hidden');
         maintBtn.innerText = isMaint ? "⚠️ Disable Maintenance Mode" : "🛠️ Enable Maintenance Mode";
     }
 
-    // Show overlay if active and user is NOT ckmanager
     if (isMaint && window.currentUser.id !== 'ckmanager') {
         document.getElementById('maintenance-overlay').classList.remove('hidden');
     }
@@ -137,11 +135,7 @@ function startApp() {
 window.populateSuppliers = function() {
     const select = document.getElementById('supplier-select');
     if(select && !select.innerHTML) {
-        select.innerHTML = `
-            <option value="CK">CK</option>
-            <option value="DSQK">DSQK</option> 
-            <option value="GJ">GJ</option>
-        `;
+        select.innerHTML = `<option value="CK">CK</option><option value="DSQK">DSQK</option><option value="GJ">GJ</option>`;
     }
     loadProducts();
 };
@@ -172,6 +166,7 @@ async function loadProducts() {
     const supplierSelect = document.getElementById('supplier-select');
     if (!supplierSelect) return;
     const supplier = supplierSelect.value;
+    const slot = document.getElementById('delivery-slot').value;
     const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
     
     if (data) {
@@ -182,16 +177,14 @@ async function loadProducts() {
         if (drop) drop.innerHTML = `<option value="">-- ITEM --</option>`;
         
         activeProducts.forEach(p => {
+            // RULE: GJ only in 2nd Run
+            if (p.supplier === 'GJ' && slot === '1st Delivery') return;
+
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
             const userVenue = window.currentUser.venue;
 
             if (p.restricted_to) {
-                let hasAccess = allowed.includes(userVenue);
-                if ((userVenue === 'DSQ' || userVenue === 'DSQK') && 
-                    (allowed.includes('DSQ') || allowed.includes('DSQK'))) {
-                    hasAccess = true;
-                }
-                if (!hasAccess) return;
+                if (!allowed.includes(userVenue)) return;
             }
 
             const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
@@ -382,7 +375,6 @@ window.generateConsolidatedReport = async function() {
     const targetDateObj = new Date(dateStr + "T00:00:00");
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDateObj.getDay()];
     
-    // Calculate date for Advance Prep (Today + 2 Days)
     const leadDateObj = new Date(targetDateObj);
     leadDateObj.setDate(leadDateObj.getDate() + 1); 
     const leadDateStr = leadDateObj.toISOString().split('T')[0];
@@ -412,10 +404,12 @@ window.generateConsolidatedReport = async function() {
             };
         });
 
-        // 1. PROCESS STANDING ORDERS
+        // 1. Process Standings
         (standings || []).forEach(s => {
+            const supp = supplierMap[s.item_name] || "GENERAL";
+            if (supp === 'GJ' && s.delivery_slot === '1st Delivery') return;
+
             if(s.days_of_week.includes(targetDay) && venueReport[s.venue_id]) {
-                const supp = supplierMap[s.item_name] || "GENERAL";
                 venueReport[s.venue_id][s.delivery_slot][supp].push({ name: s.item_name, qty: s.quantity });
                 if(totalPrep.hasOwnProperty(s.item_name)) totalPrep[s.item_name] += s.quantity;
             }
@@ -424,27 +418,22 @@ window.generateConsolidatedReport = async function() {
             }
         });
 
-        // 2. PROCESS ONE-OFF ORDERS
+        // 2. Process One-offs
         (allOrders || []).forEach(o => {
-            const isTarget = o.delivery_date === dateStr;
-            const isLead = o.delivery_date === leadDateStr;
-
-            if(isTarget && venueReport[o.venue_id]) {
+            if(o.delivery_date === dateStr && venueReport[o.venue_id]) {
                 venueReport[o.venue_id][o.delivery_slot].note = o.comment || "";
-                // Reset slot items for this venue/slot if a one-off exists (Standard app logic)
                 const slotData = venueReport[o.venue_id][o.delivery_slot];
                 slotData.CK = []; slotData.DSQK = []; slotData.GJ = []; slotData.GENERAL = [];
-                
                 o.items.forEach(i => {
+                    const supp = supplierMap[i.name] || "GENERAL";
+                    if (supp === 'GJ' && o.delivery_slot === '1st Delivery') return;
                     if (i.quantity > 0) {
-                        const supp = supplierMap[i.name] || "GENERAL";
                         slotData[supp].push({ name: i.name, qty: i.quantity, note: i.comment || "" });
                         if(totalPrep.hasOwnProperty(i.name)) totalPrep[i.name] += i.quantity;
                     }
                 });
             }
-
-            if(isLead && o.items) {
+            if(o.delivery_date === leadDateStr && o.items) {
                 o.items.forEach(i => {
                     if (i.quantity > 0 && LEAD_2_DAY_ITEMS.includes(i.name)) {
                         leadPrep[i.name] = (leadPrep[i.name] || 0) + i.quantity;
@@ -453,26 +442,22 @@ window.generateConsolidatedReport = async function() {
             }
         });
 
-        // BUILD HTML
         let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
 
-        // LIQUID PREP SECTION
-        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep</h2><div class="grid grid-cols-3 gap-4">`;
+        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep</h2><div class="grid grid-cols-3 gap-4">`;
         for (const [name, qty] of Object.entries(totalPrep)) {
             html += `<div class="bg-white p-2 rounded-xl text-center border border-emerald-100"><p class="text-[9px] font-bold text-slate-400 uppercase">${name}</p><p class="text-lg font-black text-emerald-600">${qty}</p></div>`;
         }
         html += `</div></div>`;
 
-        // ADVANCE PREP SECTION
         if (Object.keys(leadPrep).length > 0) {
-            html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (For ${leadDateStr})</h2>`;
+            html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (For ${leadDateStr})</h2>`;
             for (const [name, qty] of Object.entries(leadPrep)) {
                 html += `<div class="flex justify-between py-1 border-b border-orange-100 text-xs font-bold uppercase"><span>${name}</span><span>x${qty}</span></div>`;
             }
             html += `</div>`;
         }
 
-        // VENUE BREAKDOWN
         Object.keys(venueReport).sort().forEach(v => {
             const vData = venueReport[v];
             const hasOrder = ["1st Delivery", "2nd Delivery"].some(slot => {
@@ -481,35 +466,34 @@ window.generateConsolidatedReport = async function() {
             });
 
             if (hasOrder) {
-                html += `<div class="mb-8 p-5 bg-white border-2 border-slate-200 rounded-3xl shadow-sm">
+                html += `<div class="mb-8 p-5 bg-white border-2 border-slate-200 rounded-3xl print:shadow-none">
                             <h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-50 pb-1 mb-4 uppercase italic">${v}</h2>`;
 
                 ["1st Delivery", "2nd Delivery"].forEach(slot => {
                     const slotData = vData[slot];
-                    const hasItems = slotData.CK.length > 0 || slotData.DSQK.length > 0 || slotData.GJ.length > 0 || slotData.GENERAL.length > 0;
-                    
-                    if (hasItems || slotData.note) {
-                        html += `<div class="mb-6 last:mb-0">
-                                    <div class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-1 border-b border-slate-100">${slot}</div>`;
+                    if (slotData.CK.length > 0 || slotData.DSQK.length > 0 || slotData.GJ.length > 0 || slotData.GENERAL.length > 0 || slotData.note) {
+                        html += `<div class="mb-6 last:mb-0"><div class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-1 border-b border-slate-100">${slot}</div>`;
 
-                        // Strict Supplier Order: CK -> DSQK -> GJ
                         ["CK", "DSQK", "GJ", "GENERAL"].forEach(supplier => {
                             const items = slotData[supplier];
                             if (items && items.length > 0) {
                                 const colorClass = supplier === 'CK' ? 'text-blue-600' : supplier === 'DSQK' ? 'text-orange-600' : 'text-emerald-600';
-                                html += `<div class="mb-3 pl-3 border-l-4 border-slate-100">
-                                            <p class="text-[9px] font-black uppercase mb-1 ${colorClass}">Supplier: ${supplier}</p>`;
+                                html += `<div class="mb-3 pl-3 border-l-4 border-slate-100"><p class="text-[9px] font-black uppercase mb-1 ${colorClass}">Supplier: ${supplier}</p>`;
                                 items.forEach(i => {
-                                    html += `<div class="flex justify-between py-0.5 text-sm font-bold text-slate-700"><span>${i.name}</span><span class="text-blue-900">x${i.qty}</span></div>`;
-                                    if(i.note) html += `<p class="text-[10px] text-red-500 italic mb-1">↳ ${i.note}</p>`;
+                                    html += `
+                                    <div class="flex justify-between items-center py-1 border-b border-slate-50 text-sm font-bold text-slate-700">
+                                        <div class="flex items-center gap-2">
+                                            <input type="checkbox" class="w-4 h-4 rounded border-slate-300">
+                                            <span>${i.name}</span>
+                                        </div>
+                                        <span class="text-blue-900">x${i.qty}</span>
+                                    </div>`;
+                                    if(i.note) html += `<p class="text-[10px] text-red-500 italic mb-1 ml-6">↳ ${i.note}</p>`;
                                 });
                                 html += `</div>`;
                             }
                         });
-
-                        if (slotData.note) {
-                            html += `<div class="mt-2 p-2 bg-yellow-50 rounded-xl text-[10px] text-yellow-800 font-bold border border-yellow-100 italic">Note: ${slotData.note}</div>`;
-                        }
+                        if (slotData.note) html += `<div class="mt-2 p-2 bg-yellow-50 rounded-xl text-[10px] text-yellow-800 font-bold italic">Note: ${slotData.note}</div>`;
                         html += `</div>`;
                     }
                 });
@@ -559,7 +543,6 @@ function renderStandingList() {
     
     if (venueStandings.length === 0) {
         cont.innerHTML = `<p class="text-slate-400 font-bold py-10 uppercase text-[10px]">No standing orders for ${activeVenue}</p>`;
-        if (isOverriding) cont.innerHTML = `<div class="bg-slate-100 p-4 rounded-2xl mb-4 text-[10px] font-bold text-slate-500 uppercase italic text-center">ℹ️ Standing editing disabled while adjusting others.</div>` + cont.innerHTML;
         return;
     }
 
