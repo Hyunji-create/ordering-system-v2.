@@ -142,8 +142,8 @@ window.switchTab = function(v) {
     const header = document.querySelector('.bg-white.p-6.rounded-3xl.shadow-sm.mb-6');
     if (header) header.classList.remove('hidden');
 
-    document.getElementById('tab-daily').className = v === 'daily' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
-    document.getElementById('tab-standing').className = v === 'standing' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
+    document.getElementById('tab-daily').className = v === 'daily' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white transition-colors' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400 transition-colors';
+    document.getElementById('tab-standing').className = v === 'standing' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white transition-colors' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400 transition-colors';
 
     if (v === 'standing') loadExistingStandingValues();
 };
@@ -163,15 +163,16 @@ async function loadProducts() {
         activeProducts.forEach(p => {
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v => v.trim()) : [];
             const userVenue = window.currentUser.venue;
-            const userRole = window.currentUser.role;
 
-            let hasAccess = (userRole === 'kitchen'); // Managers see all
-            if (!hasAccess) {
-                hasAccess = !p.restricted_to || allowed.includes(userVenue);
-                if (!hasAccess && userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ'))) {
-                    hasAccess = true;
-                }
-            }
+            // --- FIXED LOGIC START ---
+            // removed: let hasAccess = (userRole === 'kitchen');
+            // Strict check: User only sees items allowed for their venue.
+            // If restricted_to is empty, everyone sees it.
+            let hasAccess = !p.restricted_to || allowed.includes(userVenue);
+
+            // Special handling for legacy DSQ matching is disabled to ensure strict separation
+            // if (!hasAccess && userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ'))) { hasAccess = true; }
+            // --- FIXED LOGIC END ---
 
             if (!hasAccess) return;
 
@@ -209,36 +210,29 @@ window.toggleNote = function(id) {
 
 // --- MANAGER OVERRIDE LOGIC START ---
 window.adjustQty = function(id, change) {
-    // FIX: Properly handle IDs that might look like "daily-Matcha" or "standing-Matcha"
-    // The previous code might have been splitting incorrectly if the item name itself had a dash.
-    
-    let itemName;
-    if (id.startsWith('daily-')) {
-        itemName = id.replace('daily-', '');
-    } else if (id.startsWith('standing-')) {
-        itemName = id.replace('standing-', '');
-    } else {
-        itemName = id;
-    }
+    // FIX: Safely extract item name regardless of prefix (daily- OR standing-)
+    let itemName = id;
+    if (id.startsWith('daily-')) itemName = id.replace('daily-', '');
+    if (id.startsWith('standing-')) itemName = id.replace('standing-', '');
 
     // BYPASS: Managers can always edit (role === 'kitchen')
-    // We only check locks if it is NOT a standing order. Standing orders shouldn't be locked by time.
+    // LOCKS: Only apply to Daily orders. Standing orders are never locked by time.
     if (!id.startsWith('standing-')) {
         if (window.currentUser.role !== 'kitchen' && isItemLocked(itemName)) return;
     }
-    
+
     const input = document.getElementById(`qty-${id}`);
     if (input) {
         let currentVal = parseInt(input.value) || 0;
-        let newVal = Math.max(0, currentVal + change);
-        input.value = newVal;
+        input.value = Math.max(0, currentVal + change);
         
-        // Only validate "save changes" button if we are on the daily tab
+        // Only trigger 'Save Changes' button logic for daily view
         if (id.startsWith('daily-')) {
             validateChanges();
         }
     }
 };
+
 function isItemLocked(itemName) {
     // BYPASS: Managers never see locks
     if (window.currentUser.role === 'kitchen') return false;
