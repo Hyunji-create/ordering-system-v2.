@@ -77,8 +77,8 @@ async function checkMaintenanceMode() {
 window.toggleMaintenance = async function() {
     const confirmPw = prompt("Enter Admin Password:");
     if (confirmPw !== '1019') return alert("Wrong password.");
-    const { data } = await _supabase.from('app_settings').select('setting_value').eq('setting_key', 'maintenance_mode').single();
-    const newStatus = data.setting_value !== 'true';
+    const { data: currentData } = await _supabase.from('app_settings').select('setting_value').eq('setting_key', 'maintenance_mode').single();
+    const newStatus = currentData.setting_value !== 'true';
     await _supabase.from('app_settings').update({ setting_value: newStatus.toString() }).eq('setting_key', 'maintenance_mode');
     location.reload();
 };
@@ -179,7 +179,6 @@ window.toggleNote = function(n) {
 };
 
 window.adjustQty = function(n, c) {
-    // MANAGER BYPASS: If role is kitchen, they can always adjust
     if (window.currentUser.role !== 'kitchen' && isItemLocked(n)) return;
     const i = document.getElementById(`qty-${n}`);
     if (i) { i.value = Math.max(0, (parseInt(i.value) || 0) + c); validateChanges(); }
@@ -210,11 +209,8 @@ function checkFormLock() {
     const today = new Date(); today.setHours(0,0,0,0);
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
     let isPast = (oDate <= today) || (oDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
-    
-    // MANAGER BYPASS: Only venues see the lock message or disabled save button
     let locked = isPast && supp !== 'GJ' && window.currentUser.role !== 'kitchen';
     const btn = document.getElementById('save-btn'), msg = document.getElementById('lock-msg');
-    
     if (locked) {
         if (btn) btn.classList.add('btn-disabled');
         if (msg) msg.classList.remove('hidden');
@@ -222,12 +218,10 @@ function checkFormLock() {
         if (btn) btn.classList.remove('btn-disabled');
         if (msg) msg.classList.add('hidden');
     }
-    
     activeProducts.forEach(p => {
         const input = document.getElementById(`qty-${p.name}`);
         const btns = document.querySelectorAll(`button[data-item="${p.name}"]`);
         if (input) {
-            // Managers never see the locked visual style
             if (isItemLocked(p.name) && window.currentUser.role !== 'kitchen') {
                 input.classList.add('locked-qty');
                 btns.forEach(b => b.classList.add('opacity-30', 'pointer-events-none'));
@@ -279,12 +273,9 @@ window.validateChanges = function() {
     const btn = document.getElementById('save-btn');
     if (JSON.stringify(state) !== initialFormState) {
         btn.classList.remove('btn-disabled');
-        // Change text for kitchen managers to emphasize override
         if (window.currentUser.role === 'kitchen') btn.innerText = "Confirm & Save Final Order";
         else btn.innerText = "Save Changes";
-    } else {
-        btn.classList.add('btn-disabled');
-    }
+    } else btn.classList.add('btn-disabled');
 };
 
 window.submitOrder = async function() {
@@ -298,7 +289,7 @@ window.submitOrder = async function() {
     const payload = { venue_id: window.currentUser.venue, delivery_date: dateStr, delivery_slot: slot, items, comment: document.getElementById('order-comment').value };
     if (currentDBOrder) await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id);
     else await _supabase.from('orders').insert([payload]);
-    alert("Success: Quantities updated!"); applyStandingToDaily();
+    alert("Saved!"); applyStandingToDaily();
 };
 
 window.generateConsolidatedReport = async function() {
@@ -351,25 +342,26 @@ window.generateConsolidatedReport = async function() {
                 if (!venueHasDailyOnPrep) leadPrep[s.item_name] = (leadPrep[s.item_name] || 0) + s.quantity;
             }
         });
-        let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black text-slate-800"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
-        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white print:border-slate-300"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep (Today)</h2><div class="grid grid-cols-3 gap-4">`;
+        let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
+        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep (Today)</h2><div class="grid grid-cols-3 gap-4">`;
         for (const [n, q] of Object.entries(totalPrep)) html += `<div class="bg-white p-2 rounded-xl text-center border border-emerald-100"><p class="text-[9px] font-bold text-slate-400 uppercase">${n}</p><p class="text-lg font-black text-emerald-600">${q}</p></div>`;
         html += `</div></div>`;
         if (Object.keys(leadPrep).length > 0) {
             html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (For delivery on ${leadDateStr})</h2>`;
-            for (const [n, q] of Object.entries(leadPrep)) {
-                html += `<div class="flex justify-between py-1 border-b border-orange-100 text-xs font-bold uppercase"><span>${n}</span><span>x${q}</span></div>`;
-            }
-            html += `<p class="text-[8px] text-orange-400 mt-2 italic font-black uppercase">* 48h Lead Time items.</p></div>`;
+            for (const [n, q] of Object.entries(leadPrep)) html += `<div class="flex justify-between py-1 border-b border-orange-100 text-xs font-bold uppercase"><span>${n}</span><span>x${q}</span></div>`;
+            html += `</div>`;
         }
         Object.keys(venueReport).sort().forEach(v => {
             const vD = venueReport[v];
             if (["1st Delivery", "2nd Delivery"].some(sl => vD[sl].CK.length > 0 || vD[sl].DSQK.length > 0 || vD[sl].GJ.length > 0 || vD[sl].GENERAL.length > 0 || vD[sl].note)) {
-                html += `<div class="mb-8 p-5 bg-white border-2 border-slate-200 rounded-3xl shadow-sm print:shadow-none print:border-slate-300"><h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-50 pb-1 mb-4 uppercase italic">${v}</h2>`;
+                html += `<div class="mb-8 p-5 bg-white border-2 border-slate-200 rounded-3xl shadow-sm print:shadow-none"><h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-50 pb-1 mb-4 uppercase italic">${v}</h2>`;
                 ["1st Delivery", "2nd Delivery"].forEach(sl => {
                     const sD = vD[sl];
                     if (sD.CK.length > 0 || sD.DSQK.length > 0 || sD.GJ.length > 0 || sD.GENERAL.length > 0 || sD.note) {
-                        html += `<div class="mb-6 last:mb-0"><div class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-1 border-b border-slate-100">${sl}</div>`;
+                        html += `<div class="mb-6 last:mb-0"><div class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-1 border-b border-slate-100">
+                                    <span>${sl}</span>
+                                    ${window.currentUser.role === 'kitchen' ? `<button onclick="editVenueOrder('${v}', '${dateStr}', '${sl}')" class="ml-4 text-blue-600 underline text-[10px]">✏️ Adjust</button>` : ""}
+                                 </div>`;
                         ["CK", "DSQK", "GJ", "GENERAL"].forEach(sup => {
                             if (sD[sup].length > 0) {
                                 const c = sup === 'CK' ? 'text-blue-600' : sup === 'DSQK' ? 'text-orange-600' : 'text-emerald-600';
