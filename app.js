@@ -381,23 +381,29 @@ window.generateConsolidatedReport = async function() {
     const dateStr = document.getElementById('admin-view-date').value;
     const targetDateObj = new Date(dateStr + "T00:00:00");
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDateObj.getDay()];
+    
+    // Calculate date for 2-Day Lead Prep (Today + 2 Days)
+    const leadDateObj = new Date(targetDateObj);
+    leadDateObj.setDate(leadDateObj.getDate() + 1); // If target is tomorrow, lead is day after
+    const leadDateStr = leadDateObj.toISOString().split('T')[0];
+    const leadDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][leadDateObj.getDay()];
+
     const res = document.getElementById('consolidated-results');
     if (!res) return;
     res.innerHTML = "LOADING..."; res.classList.remove('hidden');
 
     try {
-        const { data: oneOffs } = await _supabase.from('orders').select('*').eq('delivery_date', dateStr);
+        // Fetch data for Target Date AND Lead Date
+        const { data: allOrders } = await _supabase.from('orders').select('*').in('delivery_date', [dateStr, leadDateStr]);
         const { data: standings } = await _supabase.from('standing_orders').select('*');
         const { data: products } = await _supabase.from('products').select('name, supplier');
         
         const supplierMap = {};
-        products.forEach(p => {
-            let s = p.supplier ? p.supplier.toUpperCase() : "GENERAL";
-            supplierMap[p.name] = s;
-        });
+        products.forEach(p => { supplierMap[p.name] = p.supplier ? p.supplier.toUpperCase() : "GENERAL"; });
 
         const venueReport = {};
-        const totalPrep = {}; 
+        const totalPrep = { "Matcha": 0, "Hojicha": 0, "Strawberry Puree": 0 };
+        const leadPrep = {}; 
         const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ", "DSQK", "CK"];
         
         venues.forEach(v => {
@@ -407,58 +413,70 @@ window.generateConsolidatedReport = async function() {
             };
         });
 
-        const addToTotal = (name, qty) => {
-            totalPrep[name] = (totalPrep[name] || 0) + qty;
-        };
-
+        // 1. PROCESS STANDING ORDERS (Target Date & Lead Date)
         (standings || []).forEach(s => {
-            if(s.days_of_week && s.days_of_week.includes(targetDay)) {
-                let supp = supplierMap[s.item_name] || "GENERAL";
+            // Target Day logic
+            if(s.days_of_week.includes(targetDay)) {
                 if(venueReport[s.venue_id]) {
                     const slot = venueReport[s.venue_id][s.delivery_slot];
-                    if (slot && slot[supp]) {
-                        slot[supp].push({ name: s.item_name, qty: s.quantity });
-                        addToTotal(s.item_name, s.quantity);
-                    }
+                    slot[supplierMap[s.item_name] || "GENERAL"].push({ name: s.item_name, qty: s.quantity });
+                    if(totalPrep.hasOwnProperty(s.item_name)) totalPrep[s.item_name] += s.quantity;
                 }
+            }
+            // Lead Day logic (Advance Prep)
+            if(s.days_of_week.includes(leadDay) && LEAD_2_DAY_ITEMS.includes(s.item_name)) {
+                leadPrep[s.item_name] = (leadPrep[s.item_name] || 0) + s.quantity;
             }
         });
 
-        (oneOffs || []).forEach(o => {
-            if(venueReport[o.venue_id]) {
+        // 2. PROCESS ONE-OFF ORDERS (Target Date & Lead Date)
+        (allOrders || []).forEach(o => {
+            const isTargetDate = o.delivery_date === dateStr;
+            const isLeadDate = o.delivery_date === leadDateStr;
+
+            if(isTargetDate && venueReport[o.venue_id]) {
                 venueReport[o.venue_id][o.delivery_slot].note = o.comment || "";
                 o.items.forEach(i => {
-                    const q = i.qty || i.quantity || 0;
-                    if (q > 0) {
-                        let supp = supplierMap[i.name] || "GENERAL";
-                        const slot = venueReport[o.venue_id][o.delivery_slot];
-                        if (slot) {
-                            const targetBucket = slot[supp] ? slot[supp] : slot["GENERAL"];
-                            targetBucket.push({ name: i.name, qty: q, note: i.comment || "" });
-                            addToTotal(i.name, q);
-                        }
+                    if (i.quantity > 0) {
+                        venueReport[o.venue_id][o.delivery_slot][supplierMap[i.name] || "GENERAL"].push({ name: i.name, qty: i.quantity, note: i.comment || "" });
+                        if(totalPrep.hasOwnProperty(i.name)) totalPrep[i.name] += i.quantity;
+                    }
+                });
+            }
+
+            if(isLeadDate && o.items) {
+                o.items.forEach(i => {
+                    if (i.quantity > 0 && LEAD_2_DAY_ITEMS.includes(i.name)) {
+                        leadPrep[i.name] = (leadPrep[i.name] || 0) + i.quantity;
                     }
                 });
             }
         });
 
-        let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black text-slate-800"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
+        // BUILD HTML
+        let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
 
-        if (Object.keys(totalPrep).length > 0) {
-            html += `<div class="mb-8 p-6 bg-blue-50 border-2 border-blue-200 rounded-3xl shadow-sm">
-                <h2 class="text-xl font-black text-blue-800 uppercase italic mb-4 flex items-center gap-2">👨‍🍳 Total Kitchen Prep</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">`;
-            
-            Object.keys(totalPrep).sort((a,b) => {
-                let idxA = PRODUCT_ORDER.indexOf(a);
-                let idxB = PRODUCT_ORDER.indexOf(b);
-                return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
-            }).forEach(name => {
-                html += `<div class="flex justify-between py-1 border-b border-blue-100"><span class="font-bold text-slate-700 uppercase text-xs">${name}</span><span class="font-black text-blue-700">x${totalPrep[name]}</span></div>`;
-            });
-            html += `</div></div>`;
+        // SECTION: TOTAL PREP (Only requested 3 items)
+        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl">
+            <h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">👨‍🍳 Immediate Liquid Prep (For ${dateStr})</h2>
+            <div class="grid grid-cols-3 gap-4">`;
+        for (const [name, qty] of Object.entries(totalPrep)) {
+            html += `<div class="text-center bg-white p-2 rounded-xl shadow-sm border border-emerald-100"><p class="text-[9px] font-bold text-slate-400 uppercase">${name}</p><p class="text-lg font-black text-emerald-600">${qty}</p></div>`;
+        }
+        html += `</div></div>`;
+
+        // SECTION: ADVANCE PREP (2-Day Lead Items)
+        if (Object.keys(leadPrep).length > 0) {
+            html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl">
+                <h2 class="text-xs font-black text-orange-800 uppercase mb-3 italic">⏳ Advance Prep (For ${leadDateStr})</h2>
+                <div class="space-y-1">`;
+            for (const [name, qty] of Object.entries(leadPrep)) {
+                html += `<div class="flex justify-between py-1 border-b border-orange-100 text-xs font-bold"><span class="text-slate-700 uppercase">${name}</span><span class="text-orange-600">x${qty}</span></div>`;
+            }
+            html += `</div><p class="text-[8px] text-orange-400 mt-2 italic font-bold uppercase">* Make these today to ship the day after tomorrow.</p></div>`;
         }
 
+        // SECTION: VENUE BREAKDOWN
         Object.keys(venueReport).sort().forEach(v => {
             const vData = venueReport[v];
             const hasData = ["1st Delivery", "2nd Delivery"].some(slot => {
@@ -467,32 +485,30 @@ window.generateConsolidatedReport = async function() {
             });
 
             if (hasData) {
-                html += `<div class="mb-8 p-4 border-2 rounded-3xl bg-white shadow-sm border-slate-200"><h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-100 pb-1 mb-4 uppercase italic">${v}</h2>`;
+                html += `<div class="mb-8 p-4 border-2 rounded-3xl bg-white shadow-sm border-slate-200"><h2 class="text-xl font-black text-blue-900 border-b-2 border-blue-50 pb-1 mb-4 uppercase italic">${v}</h2>`;
                 ["1st Delivery", "2nd Delivery"].forEach(slot => {
                     const slotData = vData[slot];
                     if (slotData.CK.length > 0 || slotData.DSQK.length > 0 || slotData.GJ.length > 0 || slotData.GENERAL.length > 0 || slotData.note) {
-                        html += `<div class="mb-6 last:mb-0"><div class="flex justify-between items-center bg-slate-100 px-3 py-1 rounded-full mb-3"><span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">${slot}</span>${window.currentUser.role === 'kitchen' ? `<button onclick="editVenueOrder('${v}', '${dateStr}', '${slot}')" class="text-[10px] font-bold text-blue-600 uppercase underline">✏️ Adjust</button>` : ""}</div>`;
+                        html += `<div class="mb-4"><div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">${slot}</div>`;
                         ["CK", "DSQK", "GJ", "GENERAL"].forEach(supplier => {
                             const items = slotData[supplier];
                             if (items && items.length > 0) {
-                                const borderColor = supplier === 'CK' ? 'border-blue-500' : supplier === 'DSQK' ? 'border-orange-500' : supplier === 'GJ' ? 'border-green-500' : 'border-slate-400';
-                                html += `<div class="mb-3 pl-2 border-l-4 ${borderColor}"><p class="text-[10px] font-black text-slate-400 uppercase mb-1">From: ${supplier}</p>`;
+                                html += `<div class="mb-2 pl-2 border-l-2 border-slate-200">`;
                                 items.forEach(i => {
-                                    html += `<div class="flex justify-between py-1 border-b border-slate-50 text-sm"><span class="font-bold text-slate-700">${i.name}</span><span class="font-black text-blue-600">x${i.qty}</span></div>`;
-                                    if (i.note) html += `<p class="text-[10px] text-red-500 italic mb-1 leading-tight">↳ ${i.note}</p>`;
+                                    html += `<div class="flex justify-between py-0.5 text-sm"><span class="font-bold text-slate-700">${i.name}</span><span class="font-black text-blue-600">x${i.qty}</span></div>`;
                                 });
                                 html += `</div>`;
                             }
                         });
-                        if (slotData.note) html += `<div class="mt-2 p-2 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-[11px] text-yellow-800 font-bold italic">⚠️ ${slotData.note}</div>`;
+                        if (slotData.note) html += `<div class="mt-1 text-[10px] text-yellow-700 font-bold">⚠️ ${slotData.note}</div>`;
                         html += `</div>`;
                     }
                 });
                 html += `</div>`;
             }
         });
-        res.innerHTML = html || `<p class="text-center p-10 text-slate-400 font-bold">No orders found.</p>`;
-    } catch (e) { console.error(e); res.innerHTML = `<p class="text-red-500 font-bold p-4 text-center">System Error: Check console.</p>`; }
+        res.innerHTML = html;
+    } catch (e) { console.error(e); res.innerHTML = "Error loading report."; }
 };
 
 window.editVenueOrder = function(venueId, dateStr, slot) {
