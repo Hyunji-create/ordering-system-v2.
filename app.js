@@ -71,12 +71,6 @@ async function checkMaintenanceMode() {
         maintBtn.innerText = isMaint ? "⚠️ Disable Maintenance Mode" : "🛠️ Enable Maintenance Mode";
     }
 
-    // Show overlay for EVERYONE if maintenance is active
-    if (isMaint) {
-        document.getElementById('maintenance-overlay').classList.remove('hidden');
-    }
-}
-
     // Show overlay if active and user is NOT ckmanager
     if (isMaint && window.currentUser.id !== 'ckmanager') {
         document.getElementById('maintenance-overlay').classList.remove('hidden');
@@ -84,15 +78,12 @@ async function checkMaintenanceMode() {
 }
 
 window.toggleMaintenance = async function() {
-    // 1. Ask for password before doing anything
     const confirmPw = prompt("Enter Admin Password to toggle Maintenance Mode:");
-    
     if (confirmPw !== '1019') {
         alert("Incorrect password. Action cancelled.");
         return;
     }
 
-    // 2. If password is correct, proceed with the toggle logic
     const { data: currentData } = await _supabase.from('app_settings').select('setting_value').eq('setting_key', 'maintenance_mode').single();
     const currentStatus = currentData.setting_value === 'true';
     const newStatus = !currentStatus;
@@ -196,7 +187,6 @@ async function loadProducts() {
 
             if (p.restricted_to) {
                 let hasAccess = allowed.includes(userVenue);
-                // Bridge logic for DSQ/DSQK
                 if ((userVenue === 'DSQ' || userVenue === 'DSQK') && 
                     (allowed.includes('DSQ') || allowed.includes('DSQK'))) {
                     hasAccess = true;
@@ -407,7 +397,7 @@ window.generateConsolidatedReport = async function() {
         });
 
         const venueReport = {};
-        const totalPrep = {}; // <--- NEW: To track grand totals
+        const totalPrep = {}; 
         const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ", "DSQK", "CK"];
         
         venues.forEach(v => {
@@ -417,7 +407,6 @@ window.generateConsolidatedReport = async function() {
             };
         });
 
-        // Function to helper tally totals
         const addToTotal = (name, qty) => {
             totalPrep[name] = (totalPrep[name] || 0) + qty;
         };
@@ -429,7 +418,7 @@ window.generateConsolidatedReport = async function() {
                     const slot = venueReport[s.venue_id][s.delivery_slot];
                     if (slot && slot[supp]) {
                         slot[supp].push({ name: s.item_name, qty: s.quantity });
-                        addToTotal(s.item_name, s.quantity); // Tally Total
+                        addToTotal(s.item_name, s.quantity);
                     }
                 }
             }
@@ -446,7 +435,7 @@ window.generateConsolidatedReport = async function() {
                         if (slot) {
                             const targetBucket = slot[supp] ? slot[supp] : slot["GENERAL"];
                             targetBucket.push({ name: i.name, qty: q, note: i.comment || "" });
-                            addToTotal(i.name, q); // Tally Total
+                            addToTotal(i.name, q);
                         }
                     }
                 });
@@ -455,13 +444,11 @@ window.generateConsolidatedReport = async function() {
 
         let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black text-slate-800"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
 
-        // --- NEW: TOTAL PREP SUMMARY SECTION ---
         if (Object.keys(totalPrep).length > 0) {
             html += `<div class="mb-8 p-6 bg-blue-50 border-2 border-blue-200 rounded-3xl shadow-sm">
                 <h2 class="text-xl font-black text-blue-800 uppercase italic mb-4 flex items-center gap-2">👨‍🍳 Total Kitchen Prep</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">`;
             
-            // Sort totals by our custom PRODUCT_ORDER sequence
             Object.keys(totalPrep).sort((a,b) => {
                 let idxA = PRODUCT_ORDER.indexOf(a);
                 let idxB = PRODUCT_ORDER.indexOf(b);
@@ -472,7 +459,6 @@ window.generateConsolidatedReport = async function() {
             html += `</div></div>`;
         }
 
-        // --- VENUE BREAKDOWN SECTION ---
         Object.keys(venueReport).sort().forEach(v => {
             const vData = venueReport[v];
             const hasData = ["1st Delivery", "2nd Delivery"].some(slot => {
@@ -528,7 +514,6 @@ window.resetToKitchen = function() {
     renderStandingList();
 };
 
-// --- STANDING ORDERS ---
 async function loadStandingOrders() {
     const { data } = await _supabase.from('standing_orders').select('*');
     allStandingOrders = data || [];
