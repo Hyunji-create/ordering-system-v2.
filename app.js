@@ -336,7 +336,7 @@ window.generateConsolidatedReport = async function() {
         if (Object.keys(leadPrep).length > 0) {
             html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (Orders for ${leadDateStr})</h2>`;
             for (const [n, q] of Object.entries(leadPrep)) html += `<div class="flex justify-between py-1 border-b border-orange-100 text-xs font-bold uppercase"><span>${name}</span><span>x${q}</span></div>`;
-            html += `<p class="text-[8px] text-orange-400 mt-2 italic font-black uppercase">* 48h Lead Time items. Start today for delivery in 2 days.</p></div>`;
+            html += `<p class="text-[8px] text-orange-400 mt-2 italic font-black uppercase">* 48h Lead Time items.</p></div>`;
         }
 
         Object.keys(venueReport).sort().forEach(v => {
