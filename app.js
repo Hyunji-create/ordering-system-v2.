@@ -94,18 +94,14 @@ window.toggleMaintenance = async function() {
     if (!error) {
         alert("Maintenance Mode: " + (newStatus ? "ENABLED" : "DISABLED"));
         location.reload();
-    } else {
-        alert("Error updating status: " + error.message);
-    }
+    } else { alert("Error updating status: " + error.message); }
 };
 
 window.checkMaintPassword = function() {
     const pw = document.getElementById('maint-pw').value;
     if (pw === '1019') {
         document.getElementById('maintenance-overlay').classList.add('hidden');
-    } else {
-        alert("Incorrect Access Code.");
-    }
+    } else { alert("Incorrect Access Code."); }
 };
 
 function updateOverrideIndicator(venueName, isOverride = false) {
@@ -120,9 +116,7 @@ function updateOverrideIndicator(venueName, isOverride = false) {
                 </div>
                 <button onclick="resetToKitchen()" class="bg-white text-red-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase shadow-md">Exit</button>
             </div>`;
-    } else {
-        indicator.classList.add('hidden');
-    }
+    } else { indicator.classList.add('hidden'); }
 }
 
 // --- CORE APP LOGIC ---
@@ -168,33 +162,27 @@ async function loadProducts() {
     const selectedSupplier = supplierSelect.value;
     const slot = document.getElementById('delivery-slot').value;
 
-    // Fetch data from Supabase for the selected supplier
-    const { data, error } = await _supabase.from('products').select('*').eq('supplier', selectedSupplier);
+    const { data } = await _supabase.from('products').select('*').eq('supplier', selectedSupplier);
     
-    if (error) {
-        console.error("Supabase Error:", error);
-        return;
-    }
-
     if (data) {
         activeProducts = data.sort(sortItemsByCustomOrder);
         const list = document.getElementById('product-list');
-        const drop = document.getElementById('standing-item');
         if (list) list.innerHTML = ""; 
-        if (drop) drop.innerHTML = `<option value="">-- ITEM --</option>`;
         
         activeProducts.forEach(p => {
-            // RULE 1: If GJ is selected but it's the 1st Delivery, block the whole list
+            // RULE: GJ only in 2nd Delivery
             if (selectedSupplier === 'GJ' && slot === '1st Delivery') return;
 
-            // RULE 2: Standard Venue Restriction check
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v=>v.trim()) : [];
             const userVenue = window.currentUser.venue;
 
-            if (p.restricted_to && !allowed.includes(userVenue)) {
-                // This hides items meant for other shops
-                return;
+            // DSQ Visibility Bridge
+            let hasAccess = !p.restricted_to || allowed.includes(userVenue);
+            if (!hasAccess && (userVenue === 'DSQ' || userVenue === 'DSQK')) {
+                if (allowed.includes('DSQ') || allowed.includes('DSQK')) hasAccess = true;
             }
+
+            if (!hasAccess) return;
 
             const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
             const leadBadge = isLeadItem ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase tracking-tighter">⚠️ 2-Day Lead</span>` : "";
@@ -217,7 +205,6 @@ async function loadProducts() {
                         <input type="text" id="note-${p.name}" oninput="validateChanges()" placeholder="Note for ${p.name}..." class="note-input">
                     </div>`;
             }
-            if (drop) drop.innerHTML += `<option value="${p.name}">${p.name}</option>`;
         });
         applyStandingToDaily();
     }
@@ -346,9 +333,7 @@ window.validateChanges = function() {
     if (currentFormState !== initialFormState) { 
         btn.classList.remove('btn-disabled'); 
         if (window.currentUser.role === 'kitchen') btn.innerText = "Confirm & Save Final Order";
-    } else { 
-        btn.classList.add('btn-disabled'); 
-    }
+    } else { btn.classList.add('btn-disabled'); }
 };
 
 window.submitOrder = async function() {
@@ -384,6 +369,7 @@ window.generateConsolidatedReport = async function() {
     const targetDateObj = new Date(dateStr + "T00:00:00");
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDateObj.getDay()];
     
+    // Date for Advance Prep (Day After selected date)
     const leadDateObj = new Date(targetDateObj);
     leadDateObj.setDate(leadDateObj.getDate() + 1); 
     const leadDateStr = leadDateObj.toISOString().split('T')[0];
@@ -401,38 +387,24 @@ window.generateConsolidatedReport = async function() {
         const supplierMap = {};
         products.forEach(p => { supplierMap[p.name] = p.supplier ? p.supplier.toUpperCase() : "GENERAL"; });
 
+        const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ", "DSQK", "CK"];
         const venueReport = {};
         const totalPrep = { "Matcha": 0, "Hojicha": 0, "Strawberry Puree": 0 };
         const leadPrep = {}; 
-        const venues = ["WYN", "MCC", "WSQ", "DSQ", "GJ", "DSQK", "CK"];
-        
+
         venues.forEach(v => {
             venueReport[v] = { 
-                "1st Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "" }, 
-                "2nd Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "" } 
+                "1st Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "", hasDaily: false }, 
+                "2nd Delivery": { CK: [], DSQK: [], GJ: [], GENERAL: [], note: "", hasDaily: false } 
             };
         });
 
-        // 1. Process Standings
-        (standings || []).forEach(s => {
-            const supp = supplierMap[s.item_name] || "GENERAL";
-            if (supp === 'GJ' && s.delivery_slot === '1st Delivery') return;
-
-            if(s.days_of_week.includes(targetDay) && venueReport[s.venue_id]) {
-                venueReport[s.venue_id][s.delivery_slot][supp].push({ name: s.item_name, qty: s.quantity });
-                if(totalPrep.hasOwnProperty(s.item_name)) totalPrep[s.item_name] += s.quantity;
-            }
-            if(s.days_of_week.includes(leadDay) && LEAD_2_DAY_ITEMS.includes(s.item_name)) {
-                leadPrep[s.item_name] = (leadPrep[s.item_name] || 0) + s.quantity;
-            }
-        });
-
-        // 2. Process One-offs
+        // 1. Process Daily Orders first (as they take priority)
         (allOrders || []).forEach(o => {
             if(o.delivery_date === dateStr && venueReport[o.venue_id]) {
-                venueReport[o.venue_id][o.delivery_slot].note = o.comment || "";
                 const slotData = venueReport[o.venue_id][o.delivery_slot];
-                slotData.CK = []; slotData.DSQK = []; slotData.GJ = []; slotData.GENERAL = [];
+                slotData.note = o.comment || "";
+                slotData.hasDaily = true;
                 o.items.forEach(i => {
                     const supp = supplierMap[i.name] || "GENERAL";
                     if (supp === 'GJ' && o.delivery_slot === '1st Delivery') return;
@@ -442,6 +414,7 @@ window.generateConsolidatedReport = async function() {
                     }
                 });
             }
+            // Advance Prep from Daily Orders
             if(o.delivery_date === leadDateStr && o.items) {
                 o.items.forEach(i => {
                     if (i.quantity > 0 && LEAD_2_DAY_ITEMS.includes(i.name)) {
@@ -451,14 +424,36 @@ window.generateConsolidatedReport = async function() {
             }
         });
 
+        // 2. Process Standing Orders only if NO daily order exists
+        (standings || []).forEach(s => {
+            const supp = supplierMap[s.item_name] || "GENERAL";
+            if (supp === 'GJ' && s.delivery_slot === '1st Delivery') return;
+
+            // Target Day
+            if(s.days_of_week.includes(targetDay) && venueReport[s.venue_id]) {
+                const slotData = venueReport[s.venue_id][s.delivery_slot];
+                if (!slotData.hasDaily) { // Only use standing if daily is missing
+                    slotData[supp].push({ name: s.item_name, qty: s.quantity });
+                    if(totalPrep.hasOwnProperty(s.item_name)) totalPrep[s.item_name] += s.quantity;
+                }
+            }
+            // Lead Day (Advance Prep)
+            if(s.days_of_week.includes(leadDay) && LEAD_2_DAY_ITEMS.includes(s.item_name)) {
+                 // Check if a daily order exists for lead date (this is simplified as we don't have leadDateDaily flag here)
+                 leadPrep[s.item_name] = (leadPrep[s.item_name] || 0) + s.quantity;
+            }
+        });
+
         let html = `<div class="flex justify-between border-b-2 border-slate-800 pb-2 mb-4 uppercase text-[12px] font-black"><span>📦 Loading Plan: ${dateStr}</span><button onclick="window.print()" class="text-blue-600 underline">Print</button></div>`;
 
-        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep</h2><div class="grid grid-cols-3 gap-4">`;
+        // LIQUID PREP
+        html += `<div class="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-3xl print:bg-white print:border-slate-300"><h2 class="text-xs font-black text-emerald-800 uppercase mb-3 italic">Immediate Liquid Prep</h2><div class="grid grid-cols-3 gap-4">`;
         for (const [name, qty] of Object.entries(totalPrep)) {
             html += `<div class="bg-white p-2 rounded-xl text-center border border-emerald-100"><p class="text-[9px] font-bold text-slate-400 uppercase">${name}</p><p class="text-lg font-black text-emerald-600">${qty}</p></div>`;
         }
         html += `</div></div>`;
 
+        // ADVANCE PREP
         if (Object.keys(leadPrep).length > 0) {
             html += `<div class="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-3xl print:hidden"><h2 class="text-xs font-black text-orange-800 uppercase mb-2 italic">Advance Prep (For ${leadDateStr})</h2>`;
             for (const [name, qty] of Object.entries(leadPrep)) {
@@ -467,6 +462,7 @@ window.generateConsolidatedReport = async function() {
             html += `</div>`;
         }
 
+        // VENUE BREAKDOWN
         Object.keys(venueReport).sort().forEach(v => {
             const vData = venueReport[v];
             const hasOrder = ["1st Delivery", "2nd Delivery"].some(slot => {
@@ -475,28 +471,20 @@ window.generateConsolidatedReport = async function() {
             });
 
             if (hasOrder) {
-                html += `<div class="mb-8 p-5 bg-white border-2 border-slate-200 rounded-3xl print:shadow-none">
+                html += `<div class="mb-8 p-5 bg-white border-2 border-slate-200 rounded-3xl shadow-sm print:shadow-none">
                             <h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-50 pb-1 mb-4 uppercase italic">${v}</h2>`;
 
                 ["1st Delivery", "2nd Delivery"].forEach(slot => {
                     const slotData = vData[slot];
                     if (slotData.CK.length > 0 || slotData.DSQK.length > 0 || slotData.GJ.length > 0 || slotData.GENERAL.length > 0 || slotData.note) {
                         html += `<div class="mb-6 last:mb-0"><div class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-1 border-b border-slate-100">${slot}</div>`;
-
                         ["CK", "DSQK", "GJ", "GENERAL"].forEach(supplier => {
                             const items = slotData[supplier];
                             if (items && items.length > 0) {
                                 const colorClass = supplier === 'CK' ? 'text-blue-600' : supplier === 'DSQK' ? 'text-orange-600' : 'text-emerald-600';
                                 html += `<div class="mb-3 pl-3 border-l-4 border-slate-100"><p class="text-[9px] font-black uppercase mb-1 ${colorClass}">Supplier: ${supplier}</p>`;
                                 items.forEach(i => {
-                                    html += `
-                                    <div class="flex justify-between items-center py-1 border-b border-slate-50 text-sm font-bold text-slate-700">
-                                        <div class="flex items-center gap-2">
-                                            <input type="checkbox" class="w-4 h-4 rounded border-slate-300">
-                                            <span>${i.name}</span>
-                                        </div>
-                                        <span class="text-blue-900">x${i.qty}</span>
-                                    </div>`;
+                                    html += `<div class="flex justify-between items-center py-1 border-b border-slate-50 text-sm font-bold text-slate-700"><div class="flex items-center gap-2"><input type="checkbox" class="w-4 h-4 rounded border-slate-300"><span>${i.name}</span></div><span class="text-blue-900">x${i.qty}</span></div>`;
                                     if(i.note) html += `<p class="text-[10px] text-red-500 italic mb-1 ml-6">↳ ${i.note}</p>`;
                                 });
                                 html += `</div>`;
@@ -542,21 +530,16 @@ function renderStandingList() {
     const cont = document.getElementById('standing-items-container'); 
     const inputArea = document.querySelector('#view-standing .bg-blue-900'); 
     if(!cont) return;
-    
     const isOverriding = (window.currentUser.role === 'kitchen' && window.currentUser.venue !== originalKitchenVenue);
     if (inputArea) isOverriding ? inputArea.classList.add('hidden') : inputArea.classList.remove('hidden');
-
     cont.innerHTML = "";
     const activeVenue = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
     const venueStandings = allStandingOrders.filter(s => s.venue_id === activeVenue);
-    
     if (venueStandings.length === 0) {
         cont.innerHTML = `<p class="text-slate-400 font-bold py-10 uppercase text-[10px]">No standing orders for ${activeVenue}</p>`;
         return;
     }
-
     if (isOverriding) cont.innerHTML = `<div class="bg-slate-100 p-4 rounded-2xl mb-4 text-[10px] font-bold text-slate-500 uppercase italic text-center">ℹ️ Standing editing disabled while adjusting others.</div>`;
-
     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach(day => {
         const dayOrders = venueStandings.filter(s => s.days_of_week.includes(day));
         if (dayOrders.length > 0) {
@@ -583,7 +566,6 @@ window.addStandingOrder = async function() {
     const qty = parseInt(qtyInput.value);
     const days = Array.from(document.querySelectorAll('.day-active')).map(b => b.dataset.day);
     if (!item || isNaN(qty) || days.length === 0) return alert("Fill all info.");
-    
     const targetVenue = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
     const { error } = await _supabase.from('standing_orders').insert([{ venue_id: targetVenue, item_name: item, quantity: qty, delivery_slot: slot, days_of_week: days.join(', ') }]);
     if(!error) { alert("Standing Order Saved!"); qtyInput.value = ""; document.querySelectorAll('.day-active').forEach(b => b.classList.remove('day-active')); loadStandingOrders(); }
@@ -602,7 +584,6 @@ window.exportOrdersToCSV = async function() {
     if(!confirm("Download all order history as CSV?")) return;
     const { data, error } = await _supabase.from('orders').select('delivery_date, delivery_slot, venue_id, items, comment').order('delivery_date', { ascending: false });
     if (error) { alert("Export failed: " + error.message); return; }
-
     let csvContent = "Date,Slot,Venue,Item,Qty,ItemNote,GeneralNote\n";
     data.forEach(order => {
         order.items.forEach(item => {
@@ -611,7 +592,6 @@ window.exportOrdersToCSV = async function() {
             csvContent += `${order.delivery_date},${order.delivery_slot},${order.venue_id},${item.name},${item.quantity},${cleanItemNote},${cleanGeneralNote}\n`;
         });
     });
-
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
