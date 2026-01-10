@@ -339,10 +339,9 @@ window.generateConsolidatedReport = async function() {
         
         const supplierMap = {};
         products.forEach(p => {
-            let s = p.supplier ? p.supplier.toUpperCase() : "GENERAL";
-            if (s === "DSQ") s = "DSQK"; 
-            supplierMap[p.name] = s;
-        });
+    let s = p.supplier ? p.supplier.toUpperCase() : "GENERAL";
+    supplierMap[p.name] = s; // Just take the name exactly as it is
+});
 
         const venueReport = {};
         // ADDED "DSQK" and "CK" to the list below
