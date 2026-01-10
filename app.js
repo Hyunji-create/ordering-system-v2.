@@ -64,16 +64,18 @@ async function checkMaintenanceMode() {
     const { data } = await _supabase.from('app_settings').select('setting_value').eq('setting_key', 'maintenance_mode').single();
     const isMaint = data && data.setting_value === 'true';
 
-    // Toggle button visibility only for ckmanager
+    // Show/Hide the control button only for ckmanager
     const maintBtn = document.getElementById('maint-toggle-btn');
-    if (maintBtn) {
-        if (window.currentUser.id === 'ckmanager') {
-            maintBtn.classList.remove('hidden');
-            maintBtn.innerText = isMaint ? "⚠️ Disable Maintenance Mode" : "🛠️ Enable Maintenance Mode";
-        } else {
-            maintBtn.classList.add('hidden');
-        }
+    if (maintBtn && window.currentUser.id === 'ckmanager') {
+        maintBtn.classList.remove('hidden');
+        maintBtn.innerText = isMaint ? "⚠️ Disable Maintenance Mode" : "🛠️ Enable Maintenance Mode";
     }
+
+    // Show overlay for EVERYONE if maintenance is active
+    if (isMaint) {
+        document.getElementById('maintenance-overlay').classList.remove('hidden');
+    }
+}
 
     // Show overlay if active and user is NOT ckmanager
     if (isMaint && window.currentUser.id !== 'ckmanager') {
