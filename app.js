@@ -10,7 +10,7 @@ const USERS = [
     { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'venue' },
     { id: 'mccstaff', pw: 'mccstaff', venue: 'MCC', role: 'venue' },
     { id: 'wsqstaff', pw: 'wsqstaff', venue: 'WSQ', role: 'venue' },
-    { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'venue' },
+    { id: 'dsqstaff', pw: 'dsqstaff', venue: 'DSQ', role: 'venue' }, 
     { id: 'gjstaff', pw: 'gjstaff', venue: 'GJ', role: 'venue' },
     { id: 'dsqkmanager', pw: 'dsqkmanager', venue: 'DSQK', role: 'kitchen' },
     { id: 'ckmanager', pw: 'ckmanager', venue: 'CK', role: 'kitchen' }
@@ -29,7 +29,7 @@ window.onload = function() {
         window.currentUser = JSON.parse(savedUser);
         if (window.currentUser.role === 'kitchen') originalKitchenVenue = window.currentUser.venue;
         showDashboard();
-        checkMaintenanceMode();
+        checkMaintenanceMode(); 
     }
 };
 
@@ -60,6 +60,7 @@ function showDashboard() {
     startApp();
 }
 
+// --- MAINTENANCE MODE ---
 async function checkMaintenanceMode() {
     const { data } = await _supabase.from('app_settings').select('setting_value').eq('setting_key', 'maintenance_mode').single();
     const isMaint = data && data.setting_value === 'true';
@@ -76,8 +77,8 @@ async function checkMaintenanceMode() {
 window.toggleMaintenance = async function() {
     const confirmPw = prompt("Enter Admin Password:");
     if (confirmPw !== '1019') return alert("Wrong password.");
-    const { data: currentData } = await _supabase.from('app_settings').select('setting_value').eq('setting_key', 'maintenance_mode').single();
-    const newStatus = currentData.setting_value !== 'true';
+    const { data } = await _supabase.from('app_settings').select('setting_value').eq('setting_key', 'maintenance_mode').single();
+    const newStatus = data.setting_value !== 'true';
     await _supabase.from('app_settings').update({ setting_value: newStatus.toString() }).eq('setting_key', 'maintenance_mode');
     location.reload();
 };
@@ -86,34 +87,34 @@ window.checkMaintPassword = function() {
     if (document.getElementById('maint-pw').value === '1019') document.getElementById('maintenance-overlay').classList.add('hidden');
 };
 
-function updateOverrideIndicator(venueName, isOverride = false) {
-    const indicator = document.getElementById('override-status-indicator');
-    if (isOverride) {
-        indicator.classList.remove('hidden');
-        indicator.innerHTML = `
-            <div class="bg-red-600 text-white p-4 rounded-2xl flex justify-between items-center shadow-lg border-b-4 border-red-800 mb-4">
-                <div class="text-left">
-                    <p class="text-[9px] font-black uppercase tracking-widest opacity-80 mb-1">Override Mode Active</p>
-                    <p class="text-lg font-black tracking-tighter uppercase leading-none">ACTING FOR: ${venueName}</p>
-                </div>
-                <button onclick="resetToKitchen()" class="bg-white text-red-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase shadow-md">Exit</button>
-            </div>`;
-    } else indicator.classList.add('hidden');
+function updateOverrideIndicator(v, isO = false) {
+    const ind = document.getElementById('override-status-indicator');
+    if (isO) {
+        ind.classList.remove('hidden');
+        ind.innerHTML = `<div class="bg-red-600 text-white p-4 rounded-2xl flex justify-between items-center mb-4">
+            <div class="text-left"><p class="text-[9px] font-black uppercase opacity-80">Override Active</p><p class="text-lg font-black uppercase">Acting For: ${v}</p></div>
+            <button onclick="resetToKitchen()" class="bg-white text-red-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase">Exit</button>
+        </div>`;
+    } else ind.classList.add('hidden');
 }
 
 // --- CORE APP LOGIC ---
 function startApp() {
     setTomorrowDate();
     window.populateSuppliers();
-    loadStandingOrders();
+    loadStandingOrders(); 
 }
 
+window.populateSuppliers = function() {
+    const select = document.getElementById('supplier-select');
+    if(select && !select.innerHTML) select.innerHTML = `<option value="CK">CK</option><option value="DSQK">DSQK</option><option value="GJ">GJ</option>`;
+    loadProducts();
+};
+
 function sortItemsByCustomOrder(a, b) {
-    const nameA = a.name || a.item_name || "";
-    const nameB = b.name || b.item_name || "";
-    let idxA = PRODUCT_ORDER.indexOf(nameA);
-    let idxB = PRODUCT_ORDER.indexOf(nameB);
-    return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB); // FIXED ReferenceError: iB to idxB
+    const nA = a.name || a.item_name || ""; const nB = b.name || b.item_name || "";
+    let iA = PRODUCT_ORDER.indexOf(nA); let iB = PRODUCT_ORDER.indexOf(nB);
+    return (iA === -1 ? 999 : iA) - (iB === -1 ? 999 : iB);
 }
 
 function setTomorrowDate() {
@@ -123,31 +124,24 @@ function setTomorrowDate() {
     document.getElementById('admin-view-date').value = iso;
 }
 
-window.switchTab = function(view) {
-    document.getElementById('view-daily').classList.toggle('hidden', view !== 'daily');
-    document.getElementById('view-standing').classList.toggle('hidden', view !== 'standing');
-    const header = document.querySelector('.bg-white.p-6.rounded-3xl.shadow-sm.mb-6');
-    if (header) header.classList.remove('hidden');
-
-    document.getElementById('tab-daily').className = view === 'daily' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
-    document.getElementById('tab-standing').className = view === 'standing' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
+window.switchTab = function(v) {
+    document.getElementById('view-daily').classList.toggle('hidden', v !== 'daily');
+    document.getElementById('view-standing').classList.toggle('hidden', v !== 'standing');
+    document.getElementById('tab-daily').className = v === 'daily' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
+    document.getElementById('tab-standing').className = v === 'standing' ? 'tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white' : 'py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400';
     
-    if (view === 'standing') loadExistingStandingValues();
-};
-
-window.populateSuppliers = function() {
-    const select = document.getElementById('supplier-select');
-    if(select && !select.innerHTML) select.innerHTML = `<option value="CK">CK</option><option value="DSQK">DSQK</option><option value="GJ">GJ</option>`;
-    loadProducts();
+    if (v === 'standing') loadExistingStandingValues();
 };
 
 async function loadProducts() {
     const supplier = document.getElementById('supplier-select').value;
     const { data } = await _supabase.from('products').select('*').eq('supplier', supplier);
+    
     if (data) {
         activeProducts = data.sort(sortItemsByCustomOrder);
         const dailyList = document.getElementById('product-list');
         const standingList = document.getElementById('standing-product-list');
+        
         if (dailyList) dailyList.innerHTML = ""; 
         if (standingList) standingList.innerHTML = ""; 
         
@@ -159,24 +153,31 @@ async function loadProducts() {
             let hasAccess = (userRole === 'kitchen');
             if (!hasAccess) {
                 hasAccess = !p.restricted_to || allowed.includes(userVenue);
-                if (!hasAccess && userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ'))) hasAccess = true;
+                if (!hasAccess && userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ'))) {
+                    hasAccess = true;
+                }
             }
+
             if (!hasAccess) return;
-            
-            const isLeadItem = LEAD_2_DAY_ITEMS.includes(p.name);
-            const leadBadge = isLeadItem ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase tracking-tighter">⚠️ 2-Day Lead</span>` : "";
+
+            const isLead = LEAD_2_DAY_ITEMS.includes(p.name);
+            const badge = isLead ? `<span class="block text-[8px] text-orange-600 font-black mt-0.5 uppercase">⚠️ 2-Day Lead</span>` : "";
 
             const createRow = (prefix) => `
                 <div class="item-row py-4 border-b">
                     <div class="flex justify-between items-center px-2">
-                        <div class="text-left"><p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p>${leadBadge}<button onclick="toggleNote('${prefix}-${p.name}')" class="text-[9px] font-black text-blue-500 uppercase mt-1">📝 Note</button></div>
+                        <div class="text-left">
+                            <p class="font-bold text-slate-800 uppercase text-[13px] leading-tight">${p.name}</p>
+                            ${badge}
+                            <button onclick="toggleNote('${prefix}-${p.name}')" class="text-[9px] font-black text-blue-500 uppercase mt-1">📝 Note</button>
+                        </div>
                         <div class="flex items-center gap-2">
-                            <button type="button" onclick="adjustQty('${prefix}-${p.name}', -1)" class="qty-btn">-</button>
-                            <input type="number" id="qty-${prefix}-${p.name}" oninput="validateChanges()" data-name="${p.name}" value="0" class="w-12 h-11 border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
-                            <button type="button" onclick="adjustQty('${prefix}-${p.name}', 1)" class="qty-btn">+</button>
+                            <button type="button" onclick="adjustQty('${prefix}-${p.name}', -1)" class="qty-btn" data-item="${p.name}">-</button>
+                            <input type="number" id="qty-${prefix}-${p.name}" data-name="${p.name}" value="0" class="w-12 h-11 border-2 rounded-xl text-center font-black text-blue-600 outline-none border-slate-200">
+                            <button type="button" onclick="adjustQty('${prefix}-${p.name}', 1)" class="qty-btn" data-item="${p.name}">+</button>
                         </div>
                     </div>
-                    <input type="text" id="note-${prefix}-${p.name}" oninput="validateChanges()" placeholder="Note..." class="note-input hidden">
+                    <input type="text" id="note-${prefix}-${p.name}" oninput="validateChanges()" placeholder="Note for ${p.name}..." class="note-input hidden">
                 </div>`;
 
             if (dailyList) dailyList.innerHTML += createRow('daily');
@@ -192,7 +193,7 @@ window.toggleNote = function(id) {
 };
 
 window.adjustQty = function(id, change) {
-    const itemName = id.split('-').pop();
+    const itemName = id.includes('-') ? id.split('-').slice(2).join('-') : id; 
     if (window.currentUser.role !== 'kitchen' && isItemLocked(itemName)) return;
     const input = document.getElementById(`qty-${id}`);
     if (input) {
@@ -206,22 +207,26 @@ function isItemLocked(itemName) {
     const product = activeProducts.find(p => p.name === itemName);
     if (product && product.supplier === 'GJ') return false; 
     const dateStr = document.getElementById('delivery-date').value;
-    const now = new Date(); const oDate = new Date(dateStr + "T00:00:00");
+    const now = new Date(); const orderDate = new Date(dateStr + "T00:00:00");
     const today = new Date(); today.setHours(0,0,0,0);
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-    if (oDate <= today) return true;
-    if (oDate.getTime() === tomorrow.getTime() && now.getHours() >= 13) return true;
+    if (orderDate <= today) return true;
+    if (LEAD_2_DAY_ITEMS.includes(itemName)) {
+        if (orderDate.getTime() === tomorrow.getTime()) return true;
+        if (orderDate.getTime() === dayAfter.getTime() && now.getHours() >= 13) return true;
+    }
+    if (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13) return true;
     return false;
 }
 
 function checkFormLock() {
     const dateStr = document.getElementById('delivery-date').value;
-    const currentSupplier = document.getElementById('supplier-select').value;
-    const now = new Date(); const orderDate = new Date(dateStr + "T00:00:00");
+    const supp = document.getElementById('supplier-select').value;
+    const now = new Date(); const oDate = new Date(dateStr + "T00:00:00");
     const today = new Date(); today.setHours(0,0,0,0);
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-    let isPastCutoff = (orderDate <= today) || (orderDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
-    let locked = isPastCutoff && currentSupplier !== 'GJ' && window.currentUser.role !== 'kitchen';
+    let isPast = (oDate <= today) || (oDate.getTime() === tomorrow.getTime() && now.getHours() >= 13);
+    let locked = isPast && supp !== 'GJ' && window.currentUser.role !== 'kitchen';
 
     const btn = document.getElementById('save-btn'), msg = document.getElementById('lock-msg');
     if (locked) { if (btn) btn.classList.add('btn-disabled'); if (msg) msg.classList.remove('hidden'); }
@@ -260,8 +265,7 @@ window.applyStandingToDaily = async function() {
         const matches = allStandingOrders.filter(s => s.venue_id === window.currentUser.venue && s.days_of_week.includes(targetDay) && s.delivery_slot === slot);
         matches.forEach(s => { const inp = document.getElementById(`qty-daily-${s.item_name}`); if (inp) inp.value = s.quantity; });
     }
-    captureState();
-    checkFormLock();
+    captureState(); checkFormLock();
 };
 
 function captureState() {
@@ -340,7 +344,7 @@ window.generateConsolidatedReport = async function() {
         });
 
         standings.forEach(s => {
-            if (s.days_of_week && s.days_of_week.includes(targetDay) && venueReport[s.venue_id]) {
+            if (s.days_of_week.includes(targetDay) && venueReport[s.venue_id]) {
                 const sData = venueReport[s.venue_id][s.delivery_slot];
                 const hasDaily = (allOrders || []).some(o => o.delivery_date === dateStr && o.venue_id === s.venue_id && o.delivery_slot === s.delivery_slot);
                 if (!hasDaily) {
@@ -363,32 +367,24 @@ window.generateConsolidatedReport = async function() {
 
         Object.keys(venueReport).sort().forEach(v => {
             const vData = venueReport[v];
-            const hasData = ["1st Delivery", "2nd Delivery"].some(slot => vData[slot].CK.length > 0 || vData[slot].DSQK.length > 0 || vData[slot].GJ.length > 0 || vData[slot].GENERAL.length > 0 || vData[slot].note);
-            if (hasData) {
-                html += `<div class="mb-8 p-4 border-2 rounded-3xl bg-white shadow-sm border-slate-200"><h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-100 pb-1 mb-4 uppercase italic">${v}</h2>`;
-                ["1st Delivery", "2nd Delivery"].forEach(slot => {
-                    const slotData = vData[slot];
-                    if (slotData.CK.length > 0 || slotData.DSQK.length > 0 || slotData.GJ.length > 0 || slotData.GENERAL.length > 0 || slotData.note) {
-                        html += `<div class="mb-6 last:mb-0"><div class="flex justify-between items-center bg-slate-100 px-3 py-1 rounded-full mb-3">
-                                    <span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">${slot}</span>
-                                    ${window.currentUser.role === 'kitchen' ? `<button onclick="editVenueOrder('${v}', '${dateStr}', '${slot}')" class="text-[10px] font-bold text-blue-600 uppercase underline">✏️ Adjust</button>` : ""}
+            if (["1st Delivery", "2nd Delivery"].some(slot => vData[slot].CK.length > 0 || vData[slot].DSQK.length > 0 || vData[slot].GJ.length > 0 || vData[slot].GENERAL.length > 0 || vData[slot].note)) {
+                html += `<div class="mb-8 p-5 bg-white border-2 border-slate-200 rounded-3xl shadow-sm print:shadow-none"><h2 class="text-2xl font-black text-blue-900 border-b-4 border-blue-50 pb-1 mb-4 uppercase italic">${v}</h2>`;
+                ["1st Delivery", "2nd Delivery"].forEach(sl => {
+                    const sD = vD[sl];
+                    if (sD.CK.length > 0 || sD.DSQK.length > 0 || sD.GJ.length > 0 || sD.GENERAL.length > 0 || sD.note) {
+                        html += `<div class="mb-6 last:mb-0"><div class="flex justify-between items-center text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-1 border-b border-slate-100">
+                                    <span>${sl}</span>
+                                    ${window.currentUser.role === 'kitchen' ? `<button onclick="editVenueOrder('${v}', '${dateStr}', '${sl}')" class="text-blue-600 underline text-[10px]">✏️ Adjust</button>` : ""}
                                  </div>`;
                         ["CK", "DSQK", "GJ", "GENERAL"].forEach(sup => {
-                            const items = slotData[sup];
-                            if (items && items.length > 0) {
-                                const cClass = sup === 'CK' ? 'text-blue-600' : sup === 'DSQK' ? 'text-orange-600' : 'text-emerald-600';
-                                html += `<div class="mb-3 pl-2 border-l-4 border-slate-100"><p class="text-[10px] font-black uppercase mb-1 ${cClass}">From: ${sup}</p>`;
-                                items.sort(sortItemsByCustomOrder).forEach(i => {
-                                    html += `<div class="flex justify-between py-1 border-b border-slate-50 text-sm font-bold text-slate-700">
-                                                <div class="flex items-center gap-2"><input type="checkbox" class="w-4 h-4 rounded border-slate-300"><span>${i.name}</span></div>
-                                                <span class="text-blue-900">x${i.qty}</span>
-                                             </div>`;
-                                    if (i.note) html += `<p class="text-[10px] text-red-500 italic mb-1 ml-6">↳ ${i.note}</p>`;
-                                });
+                            if (sD[sup].length > 0) {
+                                const c = sup === 'CK' ? 'text-blue-600' : sup === 'DSQK' ? 'text-orange-600' : 'text-emerald-600';
+                                html += `<div class="mb-3 pl-3 border-l-4 border-slate-100"><p class="text-[9px] font-black uppercase mb-1 ${c}">Supplier: ${sup}</p>`;
+                                sD[sup].sort(sortItemsByCustomOrder).forEach(i => { html += `<div class="flex justify-between items-center py-1 border-b border-slate-50 text-sm font-bold text-slate-700"><div class="flex items-center gap-2"><input type="checkbox" class="w-4 h-4 rounded border-slate-300"><span>${i.name}</span></div><span class="text-blue-900">x${i.qty}</span></div>`; if(i.note) html += `<p class="text-[10px] text-red-500 italic mb-1 ml-6">↳ ${i.note}</p>`; });
                                 html += `</div>`;
                             }
                         });
-                        if (slotData.note) html += `<div class="mt-2 p-2 bg-yellow-50 border border-yellow-100 rounded-xl text-[11px] text-yellow-800 font-bold italic">⚠️ Venue Note: ${slotData.note}</div>`;
+                        if (sD.note) html += `<div class="mt-2 p-2 bg-yellow-50 border border-yellow-100 rounded-xl text-[11px] text-yellow-800 font-bold italic">Venue Note: ${sD.note}</div>`;
                         html += `</div>`;
                     }
                 });
@@ -399,28 +395,50 @@ window.generateConsolidatedReport = async function() {
     } catch (e) { console.error(e); res.innerHTML = "Error."; }
 };
 
-window.editVenueOrder = function(venueId, dateStr, slot) {
-    window.currentUser.venue = venueId;
-    updateOverrideIndicator(venueId, true);
-    document.getElementById('delivery-date').value = dateStr;
-    document.getElementById('delivery-slot').value = slot;
-    window.switchTab('daily');
-    loadProducts(); 
-    setTimeout(() => { document.getElementById('override-status-indicator')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 500);
+window.editVenueOrder = function(v, d, s) {
+    window.currentUser.venue = v; updateOverrideIndicator(v, true);
+    document.getElementById('delivery-date').value = d; document.getElementById('delivery-slot').value = s;
+    window.switchTab('daily'); loadProducts(); 
 };
 
 window.resetToKitchen = function() {
-    window.currentUser.venue = originalKitchenVenue;
-    updateOverrideIndicator(originalKitchenVenue, false);
+    window.currentUser.venue = originalKitchenVenue; updateOverrideIndicator(originalKitchenVenue, false);
     document.getElementById('welcome-msg').innerText = originalKitchenVenue;
-    setTomorrowDate();
-    loadProducts();
+    setTomorrowDate(); loadProducts();
 };
 
 async function loadStandingOrders() {
     const { data } = await _supabase.from('standing_orders').select('*');
     allStandingOrders = data || [];
+    renderStandingList();
 }
+
+window.saveStandingSchedule = async function() {
+    const slot = document.getElementById('standing-slot').value;
+    const days = Array.from(document.querySelectorAll('.day-active')).map(b => b.dataset.day);
+    if (days.length === 0) return alert("Please select at least one Day.");
+
+    const itemsToSave = [];
+    document.querySelectorAll('#standing-product-list input[type="number"]').forEach(input => {
+        const qty = parseInt(input.value);
+        if (qty > 0) itemsToSave.push({ name: input.dataset.name, qty: qty });
+    });
+
+    if (itemsToSave.length === 0) return alert("Please enter quantities.");
+
+    const targetVenue = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
+    const payload = itemsToSave.map(item => ({
+        venue_id: targetVenue,
+        item_name: item.name,
+        quantity: item.qty,
+        delivery_slot: slot,
+        days_of_week: days.join(', ')
+    }));
+
+    const { error } = await _supabase.from('standing_orders').insert(payload);
+    if (!error) { alert("Schedule Saved!"); loadStandingOrders(); }
+    else alert("Error: " + error.message);
+};
 
 window.loadExistingStandingValues = function() {
     document.querySelectorAll('[id^="qty-standing-"]').forEach(input => input.value = 0);
@@ -431,16 +449,47 @@ window.loadExistingStandingValues = function() {
     });
 };
 
+function renderStandingList() {
+    const cont = document.getElementById('standing-items-container'); 
+    if(!cont) return;
+    cont.innerHTML = "";
+    const activeVenue = (window.currentUser.role === 'kitchen') ? originalKitchenVenue : window.currentUser.venue;
+    const venueStandings = allStandingOrders.filter(s => s.venue_id === activeVenue);
+    
+    if (venueStandings.length === 0) {
+        cont.innerHTML = `<p class="text-slate-400 font-bold py-10 uppercase text-[10px]">No standing orders for ${activeVenue}</p>`;
+        return;
+    }
+
+    ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach(day => {
+        const dayOrders = venueStandings.filter(s => s.days_of_week.includes(day));
+        if (dayOrders.length > 0) {
+            let dayHtml = `<div class="mb-4 text-left"><h4 class="text-[11px] font-black text-blue-600 uppercase border-b mb-2 pb-1">${day}</h4>`;
+            ["1st Delivery", "2nd Delivery"].forEach(slot => {
+                const slotOrders = dayOrders.filter(o => o.delivery_slot === slot).sort(sortItemsByCustomOrder);
+                if (slotOrders.length > 0) {
+                    dayHtml += `<div class="pl-2 border-l-2 mb-2 border-slate-200"><p class="text-[9px] font-bold text-slate-400 uppercase italic mb-1">${slot}</p>`;
+                    slotOrders.forEach(s => {
+                        dayHtml += `<div class="flex justify-between items-center bg-slate-50 p-2 rounded-xl border mb-1"><div><p class="font-bold text-slate-800 text-[12px] uppercase">${s.item_name} x${s.quantity}</p></div><button onclick="deleteStanding(${s.id})" class="text-red-500 font-black text-[9px] uppercase hover:underline p-2">Delete</button></div>`;
+                    });
+                    dayHtml += `</div>`;
+                }
+            });
+            cont.innerHTML += dayHtml + `</div>`;
+        }
+    });
+}
+
+window.deleteStanding = async function(id) {
+    if(confirm("Remove?")) { await _supabase.from('standing_orders').delete().eq('id', id); loadStandingOrders(); }
+};
+
+window.toggleDay = function(btn) { btn.classList.toggle('day-active'); };
+
 window.exportOrdersToCSV = async function() {
     const { data } = await _supabase.from('orders').select('*').order('delivery_date', { ascending: false });
     let csv = "Date,Slot,Venue,Item,Qty,ItemNote,GeneralNote\n";
-    (data || []).forEach(order => {
-        order.items.forEach(item => {
-            const cleanItemNote = (item.comment || "").replace(/,/g, " ");
-            const cleanGeneralNote = (order.comment || "").replace(/,/g, " ");
-            csv += `${order.delivery_date},${order.delivery_slot},${order.venue_id},${item.name},${item.quantity},${cleanItemNote},${cleanGeneralNote}\n`;
-        });
-    });
+    (data || []).forEach(o => { o.items.forEach(i => { csv += `${o.delivery_date},${o.delivery_slot},${o.venue_id},${i.name},${i.quantity},${(i.comment||"").replace(/,/g," ")},${(o.comment||"").replace(/,/g," ")}\n`; }); });
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement("a"); a.href = url; a.download = `Backup_${new Date().toISOString().split('T')[0]}.csv`; a.click();
 };
