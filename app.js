@@ -209,17 +209,36 @@ window.toggleNote = function(id) {
 
 // --- MANAGER OVERRIDE LOGIC START ---
 window.adjustQty = function(id, change) {
-    const itemName = id.includes('-') ? id.split('-').slice(2).join('-') : id;
-    // BYPASS: Managers can always edit (role === 'kitchen')
-    if (window.currentUser.role !== 'kitchen' && isItemLocked(itemName)) return;
+    // FIX: Properly handle IDs that might look like "daily-Matcha" or "standing-Matcha"
+    // The previous code might have been splitting incorrectly if the item name itself had a dash.
+    
+    let itemName;
+    if (id.startsWith('daily-')) {
+        itemName = id.replace('daily-', '');
+    } else if (id.startsWith('standing-')) {
+        itemName = id.replace('standing-', '');
+    } else {
+        itemName = id;
+    }
 
+    // BYPASS: Managers can always edit (role === 'kitchen')
+    // We only check locks if it is NOT a standing order. Standing orders shouldn't be locked by time.
+    if (!id.startsWith('standing-')) {
+        if (window.currentUser.role !== 'kitchen' && isItemLocked(itemName)) return;
+    }
+    
     const input = document.getElementById(`qty-${id}`);
     if (input) {
-        input.value = Math.max(0, (parseInt(input.value) || 0) + change);
-        validateChanges();
+        let currentVal = parseInt(input.value) || 0;
+        let newVal = Math.max(0, currentVal + change);
+        input.value = newVal;
+        
+        // Only validate "save changes" button if we are on the daily tab
+        if (id.startsWith('daily-')) {
+            validateChanges();
+        }
     }
 };
-
 function isItemLocked(itemName) {
     // BYPASS: Managers never see locks
     if (window.currentUser.role === 'kitchen') return false;
