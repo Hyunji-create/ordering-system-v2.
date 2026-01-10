@@ -2,13 +2,68 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Kitchen Order Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css">
+    
+    <style>
+        /* --- CRITICAL UI STYLES FOR APP.JS LOGIC --- */
+        
+        /* Highlight active tab */
+        .tab-active {
+            background-color: #2563eb !important; /* Blue-600 */
+            color: white !important;
+        }
+
+        /* Highlight selected days in Standing Order */
+        .day-active {
+            background-color: #10b981 !important; /* Emerald-500 */
+            border-color: #059669 !important;
+            color: white !important;
+        }
+
+        /* Grey out the Save button when no changes exist */
+        .btn-disabled {
+            opacity: 0.5;
+            pointer-events: none;
+            background-color: #94a3b8 !important; /* Slate-400 */
+        }
+
+        /* Visual lock for inputs past 1pm */
+        .locked-qty {
+            background-color: #f1f5f9 !important; /* Slate-100 */
+            color: #cbd5e1 !important; /* Slate-300 */
+            pointer-events: none;
+            border-color: #e2e8f0 !important;
+        }
+
+        /* Improve + / - button response on mobile */
+        .qty-btn {
+            background-color: #eff6ff;
+            color: #2563eb;
+            width: 3rem;
+            height: 2.75rem;
+            border-radius: 0.75rem;
+            font-weight: 900;
+            font-size: 1.25rem;
+            touch-action: manipulation; /* Prevents double-tap zoom */
+        }
+        .qty-btn:active {
+            background-color: #bfdbfe;
+            transform: scale(0.95);
+        }
+
+        /* Print optimization for reports */
+        @media print {
+            body { background-color: white; }
+            #dashboard > div:not(#view-daily) { display: none; }
+            #summary-section, #product-list, #save-btn, .order-inputs { display: none; }
+            #consolidated-results { display: block !important; max-height: none !important; overflow: visible !important; }
+        }
+    </style>
 </head>
-<body class="bg-slate-200 min-h-screen p-2 font-sans text-slate-900 text-center">
+<body class="bg-slate-200 min-h-screen p-2 font-sans text-slate-900 text-center select-none">
 
     <div id="maintenance-overlay" class="hidden fixed inset-0 bg-slate-900 z-[999] flex flex-col items-center justify-center p-6 text-center">
         <div class="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full border-b-8 border-orange-500">
@@ -23,13 +78,14 @@
     <div id="login-card" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-3xl shadow-2xl">
         <h1 class="text-3xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Kitchen Portal</h1>
         <div class="space-y-4 mt-6">
-            <input id="username" type="text" placeholder="USER ID" class="w-full p-4 border-2 rounded-2xl uppercase text-center font-bold outline-none">
-            <input id="password" type="password" placeholder="PASSWORD" class="w-full p-4 border-2 rounded-2xl text-center font-bold outline-none">
-            <button onclick="window.handleLogin()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-lg uppercase tracking-widest text-lg">Sign In</button>
+            <input id="username" type="text" placeholder="USER ID" class="w-full p-4 border-2 rounded-2xl uppercase text-center font-bold outline-none focus:border-blue-500">
+            <input id="password" type="password" placeholder="PASSWORD" class="w-full p-4 border-2 rounded-2xl text-center font-bold outline-none focus:border-blue-500">
+            <button onclick="window.handleLogin()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-lg uppercase tracking-widest text-lg active:scale-95 transition-transform">Sign In</button>
         </div>
     </div>
 
-    <div id="dashboard" class="hidden max-w-2xl mx-auto space-y-4">
+    <div id="dashboard" class="hidden max-w-2xl mx-auto space-y-4 pb-20">
+        
         <div class="bg-white p-5 rounded-3xl shadow-sm flex flex-col border-b-4 border-blue-600">
             <div class="flex justify-between items-center">
                 <h1 id="welcome-msg" class="text-2xl font-black text-blue-900 uppercase italic text-left">VENUE</h1>
@@ -42,8 +98,8 @@
         </div>
 
         <div class="grid grid-cols-2 gap-3">
-            <button onclick="switchTab('daily')" id="tab-daily" class="tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white">📅 Daily Order</button>
-            <button onclick="switchTab('standing')" id="tab-standing" class="py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400">🔄 Standing Order</button>
+            <button onclick="switchTab('daily')" id="tab-daily" class="tab-active py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white transition-colors">📅 Daily Order</button>
+            <button onclick="switchTab('standing')" id="tab-standing" class="py-5 rounded-3xl font-black text-xs uppercase shadow-md bg-white text-slate-400 transition-colors">🔄 Standing Order</button>
         </div>
 
         <div class="bg-white p-6 rounded-3xl shadow-lg space-y-6 mb-6">
@@ -54,6 +110,7 @@
         </div>
 
         <div id="view-daily" class="space-y-4">
+            
             <div id="summary-section" class="bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
                 <div class="flex justify-between items-center mb-4">
                     <p class="text-[10px] font-black uppercase text-blue-400 tracking-widest">Master Order Summary</p>
@@ -64,7 +121,7 @@
                 
                 <div class="flex gap-2">
                     <input id="admin-view-date" type="date" class="flex-1 p-3 rounded-xl text-slate-900 font-bold outline-none">
-                    <button onclick="generateConsolidatedReport()" class="bg-blue-600 px-6 py-3 rounded-xl font-black text-[10px] uppercase">
+                    <button onclick="generateConsolidatedReport()" class="bg-blue-600 px-6 py-3 rounded-xl font-black text-[10px] uppercase hover:bg-blue-500">
                         View List
                     </button>
                 </div>
@@ -74,7 +131,7 @@
             <div id="override-status-indicator" class="hidden transition-all duration-300"></div>
 
             <div class="bg-white p-6 rounded-3xl shadow-lg space-y-6">
-                <div class="space-y-3">
+                <div class="space-y-3 order-inputs">
                     <div class="flex items-center gap-3">
                         <label class="w-24 text-left text-[10px] font-black text-slate-400 uppercase tracking-tighter">Delivery Date</label>
                         <input id="delivery-date" type="date" onchange="applyStandingToDaily()" class="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-center outline-none focus:border-blue-500">
@@ -95,7 +152,7 @@
                     <textarea id="order-comment" oninput="validateChanges()" placeholder="Late additions or general instructions..." class="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm outline-none border-slate-100 focus:border-blue-300 transition-colors" rows="3"></textarea>
                 </div>
                 
-                <button id="save-btn" onclick="submitOrder()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm btn-disabled">Save Changes</button>
+                <button id="save-btn" onclick="submitOrder()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm btn-disabled transition-all">Save Changes</button>
                 <p id="lock-msg" class="text-[10px] font-black text-red-500 uppercase hidden italic">🔒 Locked (After 1PM). Notes only.</p>
             </div>
         </div>
@@ -105,19 +162,19 @@
                 <h3 class="font-black text-lg uppercase italic mb-4">Set Recurring Schedule</h3>
                 
                 <div class="flex flex-wrap gap-2 justify-center mb-6" id="day-selector">
-                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Mon">MON</button>
-                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Tue">TUE</button>
-                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Wed">WED</button>
-                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Thu">THU</button>
-                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Fri">FRI</button>
-                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Sat">SAT</button>
-                    <button onclick="toggleDay(this)" class="day-btn w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px]" data-day="Sun">SUN</button>
+                    <button onclick="toggleDay(this)" class="w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px] transition-colors" data-day="Mon">MON</button>
+                    <button onclick="toggleDay(this)" class="w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px] transition-colors" data-day="Tue">TUE</button>
+                    <button onclick="toggleDay(this)" class="w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px] transition-colors" data-day="Wed">WED</button>
+                    <button onclick="toggleDay(this)" class="w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px] transition-colors" data-day="Thu">THU</button>
+                    <button onclick="toggleDay(this)" class="w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px] transition-colors" data-day="Fri">FRI</button>
+                    <button onclick="toggleDay(this)" class="w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px] transition-colors" data-day="Sat">SAT</button>
+                    <button onclick="toggleDay(this)" class="w-12 h-12 rounded-xl bg-blue-800 border-2 border-blue-700 font-black text-[10px] transition-colors" data-day="Sun">SUN</button>
                 </div>
                 
                 <div class="space-y-4 text-slate-900 bg-white/10 p-4 rounded-2xl">
                     <div class="flex items-center gap-3">
                         <label class="w-20 text-left text-[10px] font-black text-blue-200 uppercase tracking-tighter">Setup</label>
-                        <select id="standing-slot" class="flex-1 p-4 rounded-2xl font-bold uppercase text-xs text-slate-900">
+                        <select id="standing-slot" class="flex-1 p-4 rounded-2xl font-bold uppercase text-xs text-slate-900 outline-none">
                             <option value="1st Delivery">1st Delivery</option>
                             <option value="2nd Delivery">2nd Delivery</option>
                         </select>
