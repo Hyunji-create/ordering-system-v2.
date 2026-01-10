@@ -78,9 +78,23 @@ function updateOverrideIndicator(venueName, isOverride = false) {
 // --- CORE APP LOGIC ---
 function startApp() {
     setTomorrowDate();
-    window.populateSuppliers();
-    loadStandingOrders();
+    window.populateSuppliers(); // Calls the dropdown builder
+    loadStandingOrders();       // Loads the standing order list
 }
+
+// This DEFINES the function (Keep it outside startApp)
+window.populateSuppliers = function() {
+    const select = document.getElementById('supplier-select');
+    if(select && !select.innerHTML) {
+        // We match the 'value' exactly to your Supabase column: DSQK
+        select.innerHTML = `
+            <option value="CK">CK</option>
+            <option value="DSQK">DSQK</option>
+            <option value="GJ">GJ</option>
+        `;
+    }
+    loadProducts();
+};
 
 function sortItemsByCustomOrder(a, b) {
     const nameA = a.name || a.item_name || "";
