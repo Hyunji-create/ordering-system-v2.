@@ -164,15 +164,8 @@ async function loadProducts() {
             const allowed = p.restricted_to ? p.restricted_to.split(',').map(v => v.trim()) : [];
             const userVenue = window.currentUser.venue;
 
-            // --- FIXED LOGIC START ---
-            // removed: let hasAccess = (userRole === 'kitchen');
             // Strict check: User only sees items allowed for their venue.
-            // If restricted_to is empty, everyone sees it.
             let hasAccess = !p.restricted_to || allowed.includes(userVenue);
-
-            // Special handling for legacy DSQ matching is disabled to ensure strict separation
-            // if (!hasAccess && userVenue.startsWith('DSQ') && allowed.some(a => a.startsWith('DSQ'))) { hasAccess = true; }
-            // --- FIXED LOGIC END ---
 
             if (!hasAccess) return;
 
@@ -210,7 +203,6 @@ window.toggleNote = function(id) {
 
 // --- MANAGER OVERRIDE LOGIC START ---
 window.adjustQty = function(id, change) {
-    // FIX: Safely extract item name regardless of prefix (daily- OR standing-)
     let itemName = id;
     if (id.startsWith('daily-')) itemName = id.replace('daily-', '');
     if (id.startsWith('standing-')) itemName = id.replace('standing-', '');
@@ -363,24 +355,46 @@ window.validateChanges = function() {
 window.submitOrder = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
-    const items = [];
+    
+    // 1. Capture the new inputs from the screen (Current Supplier only)
+    const currentSupplierItems = [];
     document.querySelectorAll('#product-list .item-row').forEach(row => {
         const inp = row.querySelector('input[type="number"]');
-        if (inp) items.push({
-            name: inp.dataset.name,
-            quantity: parseInt(inp.value) || 0,
-            comment: row.querySelector('.note-input').value
-        });
+        if (inp) {
+            currentSupplierItems.push({
+                name: inp.dataset.name,
+                quantity: parseInt(inp.value) || 0,
+                comment: row.querySelector('.note-input').value
+            });
+        }
     });
+
+    // 2. Handle Merging: Keep items from other suppliers that are already in DB
+    let finalItems = currentSupplierItems; 
+
+    if (currentDBOrder && currentDBOrder.items) {
+        // Filter the existing DB items: Keep the ones that are NOT part of the current active supplier view
+        const otherSupplierItems = currentDBOrder.items.filter(dbItem => {
+            // Check if this dbItem exists in the current activeProducts list (meaning it belongs to current supplier)
+            const isItemInCurrentView = activeProducts.some(p => p.name === dbItem.name);
+            return !isItemInCurrentView; // Keep it if it belongs to a different supplier
+        });
+
+        // Combine the preserved items + the new items
+        finalItems = [...otherSupplierItems, ...currentSupplierItems];
+    }
+
     const payload = {
         venue_id: window.currentUser.venue,
         delivery_date: dateStr,
         delivery_slot: slot,
-        items,
+        items: finalItems,
         comment: document.getElementById('order-comment').value
     };
+
     if (currentDBOrder) await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id);
     else await _supabase.from('orders').insert([payload]);
+    
     alert("Saved!");
     applyStandingToDaily();
 };
