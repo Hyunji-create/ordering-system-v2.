@@ -356,33 +356,45 @@ window.submitOrder = async function() {
     const dateStr = document.getElementById('delivery-date').value;
     const slot = document.getElementById('delivery-slot').value;
     
-    // 1. Capture the new inputs from the screen (Current Supplier only)
-    const currentSupplierItems = [];
+    // 1. Capture inputs. We identify EXACTLY which items are on screen.
+    const submittedItemNames = new Set();
+    const newItems = [];
+
     document.querySelectorAll('#product-list .item-row').forEach(row => {
         const inp = row.querySelector('input[type="number"]');
         if (inp) {
-            currentSupplierItems.push({
-                name: inp.dataset.name,
-                quantity: parseInt(inp.value) || 0,
-                comment: row.querySelector('.note-input').value
-            });
+            const name = inp.dataset.name;
+            const qty = parseInt(inp.value) || 0;
+            const note = row.querySelector('.note-input').value;
+
+            submittedItemNames.add(name); // Track that we have touched this item
+
+            // Only add to save list if quantity > 0
+            if (qty > 0) {
+                newItems.push({ name: name, quantity: qty, comment: note });
+            }
         }
     });
 
-    // 2. Handle Merging: Keep items from other suppliers that are already in DB
-    let finalItems = currentSupplierItems; 
+    // 2. Handle Merging: Keep DB items ONLY if they are NOT in the submitted set
+    let finalItems = [];
 
     if (currentDBOrder && currentDBOrder.items) {
-        // Filter the existing DB items: Keep the ones that are NOT part of the current active supplier view
-        const otherSupplierItems = currentDBOrder.items.filter(dbItem => {
-            // Check if this dbItem exists in the current activeProducts list (meaning it belongs to current supplier)
-            const isItemInCurrentView = activeProducts.some(p => p.name === dbItem.name);
-            return !isItemInCurrentView; // Keep it if it belongs to a different supplier
+        const keptDBItems = currentDBOrder.items.filter(dbItem => {
+            // If the item name is in 'submittedItemNames', it means we have a new value (or 0) for it, 
+            // so we should NOT keep the old one.
+            return !submittedItemNames.has(dbItem.name);
         });
-
-        // Combine the preserved items + the new items
-        finalItems = [...otherSupplierItems, ...currentSupplierItems];
+        finalItems = [...keptDBItems];
     }
+
+    // 3. Add the new items
+    finalItems = [...finalItems, ...newItems];
+
+    // 4. SAFETY NET: Deduplicate by name just in case
+    const uniqueMap = new Map();
+    finalItems.forEach(item => uniqueMap.set(item.name, item));
+    finalItems = Array.from(uniqueMap.values());
 
     const payload = {
         venue_id: window.currentUser.venue,
