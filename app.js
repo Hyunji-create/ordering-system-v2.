@@ -303,7 +303,17 @@ window.applyStandingToDaily = async function() {
     currentDBOrder = data;
 
     if (data) {
+        // --- AUTO-CLEAN DUPLICATES ON LOAD ---
+        // If we found an order, let's dedup it right now just to be safe visually
+        const uniqueMap = new Map();
         data.items.forEach(item => {
+             const cleanName = item.name.trim();
+             uniqueMap.set(cleanName, { ...item, name: cleanName });
+        });
+        const cleanItems = Array.from(uniqueMap.values());
+        // -------------------------------------
+
+        cleanItems.forEach(item => {
             const inp = document.getElementById(`qty-daily-${item.name}`);
             if (inp) {
                 inp.value = item.quantity;
@@ -363,7 +373,8 @@ window.submitOrder = async function() {
     document.querySelectorAll('#product-list .item-row').forEach(row => {
         const inp = row.querySelector('input[type="number"]');
         if (inp) {
-            const name = inp.dataset.name;
+            // TRIM whitespace to prevent "Matcha " vs "Matcha"
+            const name = inp.dataset.name.trim(); 
             const qty = parseInt(inp.value) || 0;
             const note = row.querySelector('.note-input').value;
 
@@ -381,9 +392,11 @@ window.submitOrder = async function() {
 
     if (currentDBOrder && currentDBOrder.items) {
         const keptDBItems = currentDBOrder.items.filter(dbItem => {
+            // TRIM here too
+            const dbName = dbItem.name.trim();
             // If the item name is in 'submittedItemNames', it means we have a new value (or 0) for it, 
             // so we should NOT keep the old one.
-            return !submittedItemNames.has(dbItem.name);
+            return !submittedItemNames.has(dbName);
         });
         finalItems = [...keptDBItems];
     }
@@ -393,7 +406,11 @@ window.submitOrder = async function() {
 
     // 4. SAFETY NET: Deduplicate by name just in case
     const uniqueMap = new Map();
-    finalItems.forEach(item => uniqueMap.set(item.name, item));
+    finalItems.forEach(item => {
+        // Ensure name is clean
+        const n = item.name.trim();
+        uniqueMap.set(n, { ...item, name: n });
+    });
     finalItems = Array.from(uniqueMap.values());
 
     const payload = {
