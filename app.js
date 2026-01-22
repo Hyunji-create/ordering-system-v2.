@@ -303,11 +303,12 @@ window.applyStandingToDaily = async function() {
     currentDBOrder = data;
 
     if (data) {
-        // --- AUTO-CLEAN DUPLICATES ON LOAD ---
-        // If we found an order, let's dedup it right now just to be safe visually
+        // --- AUTO-CLEAN DUPLICATES ON LOAD (Visual only) ---
+        // We use this so that if you 'Adjust', you see clean numbers (No Summing, just overwriting)
         const uniqueMap = new Map();
         data.items.forEach(item => {
              const cleanName = item.name.trim();
+             // Overwrite if exists. DO NOT ADD.
              uniqueMap.set(cleanName, { ...item, name: cleanName });
         });
         const cleanItems = Array.from(uniqueMap.values());
@@ -404,11 +405,12 @@ window.submitOrder = async function() {
     // 3. Add the new items
     finalItems = [...finalItems, ...newItems];
 
-    // 4. SAFETY NET: Deduplicate by name just in case
+    // 4. SAFETY NET: Deduplicate by name just in case (Overwrite duplicates, do not sum)
     const uniqueMap = new Map();
     finalItems.forEach(item => {
         // Ensure name is clean
         const n = item.name.trim();
+        // If it exists, overwrite it. DO NOT SUM.
         uniqueMap.set(n, { ...item, name: n });
     });
     finalItems = Array.from(uniqueMap.values());
@@ -459,10 +461,23 @@ window.generateConsolidatedReport = async function() {
         });
 
         (allOrders || []).forEach(o => {
+            // --- NEW: DEDUPLICATE THE ORDER ITEMS BEFORE PROCESSING ---
+            const uniqueOrderItems = new Map();
+            if(o.items && Array.isArray(o.items)){
+                o.items.forEach(i => {
+                    const clean = i.name.trim();
+                    // Overwrite matches. Do not sum.
+                    uniqueOrderItems.set(clean, i); 
+                });
+            }
+            const cleanItems = Array.from(uniqueOrderItems.values());
+            // ----------------------------------------------------------
+
             if (o.delivery_date === dateStr && venueReport[o.venue_id]) {
                 const sData = venueReport[o.venue_id][o.delivery_slot];
                 sData.note = o.comment || "";
-                o.items.forEach(i => {
+                
+                cleanItems.forEach(i => {
                     if (i.quantity > 0) {
                         const s = suppMap[i.name] || "GENERAL";
                         sData[s].push({ name: i.name, qty: i.quantity, note: i.comment || "" });
@@ -471,7 +486,7 @@ window.generateConsolidatedReport = async function() {
                 });
             }
             if (o.delivery_date === leadDateStr) {
-                o.items.forEach(i => {
+                cleanItems.forEach(i => {
                     if (i.quantity > 0 && LEAD_2_DAY_ITEMS.includes(i.name)) leadPrep[i.name] = (leadPrep[i.name] || 0) + i.quantity;
                 });
             }
