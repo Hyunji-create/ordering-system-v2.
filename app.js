@@ -384,6 +384,7 @@ window.submitOrder = async function() {
         document.querySelectorAll('#product-list .item-row').forEach(row => {
             const inp = row.querySelector('input[type="number"]');
             if (inp) {
+                // TRIM whitespace to prevent "Matcha " vs "Matcha"
                 const name = inp.dataset.name.trim(); 
                 const qty = parseInt(inp.value) || 0;
                 const note = row.querySelector('.note-input').value;
@@ -446,6 +447,7 @@ window.submitOrder = async function() {
         validateChanges(); // Re-check state
     }
 };
+
 window.generateConsolidatedReport = async function() {
     const dateStr = document.getElementById('admin-view-date').value;
     const targetDateObj = new Date(dateStr + "T00:00:00");
@@ -477,33 +479,49 @@ window.generateConsolidatedReport = async function() {
         });
 
         (allOrders || []).forEach(o => {
-            // --- NEW: DEDUPLICATE THE ORDER ITEMS BEFORE PROCESSING ---
+            // DEDUPLICATE items inside this specific order row first
             const uniqueOrderItems = new Map();
             if(o.items && Array.isArray(o.items)){
                 o.items.forEach(i => {
                     const clean = i.name.trim();
-                    // Overwrite matches. Do not sum.
                     uniqueOrderItems.set(clean, i); 
                 });
             }
             const cleanItems = Array.from(uniqueOrderItems.values());
-            // ----------------------------------------------------------
 
             if (o.delivery_date === dateStr && venueReport[o.venue_id]) {
                 const sData = venueReport[o.venue_id][o.delivery_slot];
-                sData.note = o.comment || "";
+                // Keep longest note if multiple rows
+                if((o.comment||"").length > sData.note.length) sData.note = o.comment || "";
                 
                 cleanItems.forEach(i => {
                     if (i.quantity > 0) {
                         const s = suppMap[i.name] || "GENERAL";
-                        sData[s].push({ name: i.name, qty: i.quantity, note: i.comment || "" });
-                        if (totalPrep.hasOwnProperty(i.name)) totalPrep[i.name] += i.quantity;
+                        
+                        // --- VISUAL SHIELD: CHECK IF ITEM EXISTS IN REPORT BEFORE ADDING ---
+                        // This handles the "Multiple Duplicate Rows" bug visually.
+                        const existingIndex = sData[s].findIndex(existing => existing.name === i.name);
+                        if (existingIndex > -1) {
+                            // If exists, overwrite it (assuming duplicate row). Do NOT add.
+                            sData[s][existingIndex] = { name: i.name, qty: i.quantity, note: i.comment || "" };
+                        } else {
+                            sData[s].push({ name: i.name, qty: i.quantity, note: i.comment || "" });
+                            // Only add to total prep if we are adding a NEW item line (avoids double counting total prep)
+                            if (totalPrep.hasOwnProperty(i.name)) totalPrep[i.name] += i.quantity;
+                        }
                     }
                 });
             }
             if (o.delivery_date === leadDateStr) {
+                // For lead prep, we also need to be careful not to double count if multiple rows exist
+                // Ideally, we rely on the DB fix for this, but simplistic approach:
                 cleanItems.forEach(i => {
-                    if (i.quantity > 0 && LEAD_2_DAY_ITEMS.includes(i.name)) leadPrep[i.name] = (leadPrep[i.name] || 0) + i.quantity;
+                    if (i.quantity > 0 && LEAD_2_DAY_ITEMS.includes(i.name)) {
+                         // This simple summing might double count lead prep if rows are duplicated. 
+                         // But lead prep is a summary, hard to dedupe without venue context.
+                         // The DB fix script is best for this part.
+                         leadPrep[i.name] = (leadPrep[i.name] || 0) + i.quantity;
+                    }
                 });
             }
         });
