@@ -364,72 +364,88 @@ window.validateChanges = function() {
 };
 
 window.submitOrder = async function() {
-    const dateStr = document.getElementById('delivery-date').value;
-    const slot = document.getElementById('delivery-slot').value;
+    const btn = document.getElementById('save-btn');
     
-    // 1. Capture inputs. We identify EXACTLY which items are on screen.
-    const submittedItemNames = new Set();
-    const newItems = [];
-
-    document.querySelectorAll('#product-list .item-row').forEach(row => {
-        const inp = row.querySelector('input[type="number"]');
-        if (inp) {
-            // TRIM whitespace to prevent "Matcha " vs "Matcha"
-            const name = inp.dataset.name.trim(); 
-            const qty = parseInt(inp.value) || 0;
-            const note = row.querySelector('.note-input').value;
-
-            submittedItemNames.add(name); // Track that we have touched this item
-
-            // Only add to save list if quantity > 0
-            if (qty > 0) {
-                newItems.push({ name: name, quantity: qty, comment: note });
-            }
-        }
-    });
-
-    // 2. Handle Merging: Keep DB items ONLY if they are NOT in the submitted set
-    let finalItems = [];
-
-    if (currentDBOrder && currentDBOrder.items) {
-        const keptDBItems = currentDBOrder.items.filter(dbItem => {
-            // TRIM here too
-            const dbName = dbItem.name.trim();
-            // If the item name is in 'submittedItemNames', it means we have a new value (or 0) for it, 
-            // so we should NOT keep the old one.
-            return !submittedItemNames.has(dbName);
-        });
-        finalItems = [...keptDBItems];
+    // 1. LOCK THE BUTTON IMMEDIATELY to prevent double-clicks on bad wifi
+    if (btn) {
+        btn.classList.add('btn-disabled');
+        btn.innerText = "⏳ Saving...";
+        btn.disabled = true; // Hard disable
     }
 
-    // 3. Add the new items
-    finalItems = [...finalItems, ...newItems];
+    try {
+        const dateStr = document.getElementById('delivery-date').value;
+        const slot = document.getElementById('delivery-slot').value;
+        
+        // 2. Capture inputs
+        const submittedItemNames = new Set();
+        const newItems = [];
 
-    // 4. SAFETY NET: Deduplicate by name just in case (Overwrite duplicates, do not sum)
-    const uniqueMap = new Map();
-    finalItems.forEach(item => {
-        // Ensure name is clean
-        const n = item.name.trim();
-        // If it exists, overwrite it. DO NOT SUM.
-        uniqueMap.set(n, { ...item, name: n });
-    });
-    finalItems = Array.from(uniqueMap.values());
+        document.querySelectorAll('#product-list .item-row').forEach(row => {
+            const inp = row.querySelector('input[type="number"]');
+            if (inp) {
+                const name = inp.dataset.name.trim(); 
+                const qty = parseInt(inp.value) || 0;
+                const note = row.querySelector('.note-input').value;
 
-    const payload = {
-        venue_id: window.currentUser.venue,
-        delivery_date: dateStr,
-        delivery_slot: slot,
-        items: finalItems,
-        comment: document.getElementById('order-comment').value
-    };
+                submittedItemNames.add(name);
 
-    if (currentDBOrder) await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id);
-    else await _supabase.from('orders').insert([payload]);
-    
-    alert("Saved!");
-    applyStandingToDaily();
+                if (qty > 0) {
+                    newItems.push({ name: name, quantity: qty, comment: note });
+                }
+            }
+        });
+
+        // 3. Handle Merging (Keep items from other suppliers)
+        let finalItems = [];
+
+        if (currentDBOrder && currentDBOrder.items) {
+            const keptDBItems = currentDBOrder.items.filter(dbItem => {
+                const dbName = dbItem.name.trim();
+                return !submittedItemNames.has(dbName);
+            });
+            finalItems = [...keptDBItems];
+        }
+
+        // 4. Combine
+        finalItems = [...finalItems, ...newItems];
+
+        // 5. SAFETY NET: Deduplicate (Overwrite mode)
+        const uniqueMap = new Map();
+        finalItems.forEach(item => {
+            const n = item.name.trim();
+            uniqueMap.set(n, { ...item, name: n });
+        });
+        finalItems = Array.from(uniqueMap.values());
+
+        const payload = {
+            venue_id: window.currentUser.venue,
+            delivery_date: dateStr,
+            delivery_slot: slot,
+            items: finalItems,
+            comment: document.getElementById('order-comment').value
+        };
+
+        if (currentDBOrder) await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id);
+        else await _supabase.from('orders').insert([payload]);
+        
+        alert("Saved!");
+        applyStandingToDaily();
+
+    } catch (e) {
+        console.error(e);
+        alert("Error saving: " + e.message);
+    } finally {
+        // 6. UNLOCK BUTTON (Even if error occurs)
+        if (btn) {
+            btn.classList.remove('btn-disabled');
+            // Restore correct text based on role
+            btn.innerText = window.currentUser.role === 'kitchen' ? "Confirm & Save Final Order" : "Save Changes";
+            btn.disabled = false;
+        }
+        validateChanges(); // Re-check state
+    }
 };
-
 window.generateConsolidatedReport = async function() {
     const dateStr = document.getElementById('admin-view-date').value;
     const targetDateObj = new Date(dateStr + "T00:00:00");
