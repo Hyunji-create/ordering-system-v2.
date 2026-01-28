@@ -304,6 +304,7 @@ window.applyStandingToDaily = async function() {
 
     if (data) {
         // --- AUTO-CLEAN DUPLICATES ON LOAD (Visual only) ---
+        // We use this so that if you 'Adjust', you see clean numbers (No Summing, just overwriting)
         const uniqueMap = new Map();
         data.items.forEach(item => {
              const cleanName = item.name.trim();
@@ -376,18 +377,39 @@ window.submitOrder = async function() {
         const dateStr = document.getElementById('delivery-date').value;
         const slot = document.getElementById('delivery-slot').value;
         
-        // 2. Fetch the LATEST order state from DB right now to avoid overwriting conflicts or working with stale data
-        const { data: latestOrder } = await _supabase
+        // 2. Fetch ALL matching rows (Handles Duplicate Rows Bug)
+        const { data: allRows } = await _supabase
             .from('orders')
             .select('*')
             .eq('venue_id', window.currentUser.venue)
             .eq('delivery_date', dateStr)
-            .eq('delivery_slot', slot)
-            .maybeSingle();
+            .eq('delivery_slot', slot);
 
-        // 3. Capture inputs from the screen (Current Supplier items)
+        // 3. Flatten ALL items from ALL duplicate rows into one master list
+        // This ensures we don't lose items from Supplier B if we happen to save Supplier A on a "ghost" row.
+        let allExistingItems = [];
+        let firstRowId = null;
+        let duplicateRowIds = [];
+
+        if (allRows && allRows.length > 0) {
+            // Sort by ID to keep the oldest or newest? Let's just keep the first one returned as master.
+            firstRowId = allRows[0].id;
+            
+            // Collect IDs of duplicates to delete later
+            if (allRows.length > 1) {
+                duplicateRowIds = allRows.slice(1).map(r => r.id);
+            }
+
+            // Merge items
+            allRows.forEach(row => {
+                if (row.items && Array.isArray(row.items)) {
+                    allExistingItems = [...allExistingItems, ...row.items];
+                }
+            });
+        }
+
+        // 4. Capture inputs from the screen (Current Supplier items)
         const submittedItems = [];
-        // Helper set to know which items are currently on screen (to filter them out from DB list)
         const itemsOnScreenNames = new Set(); 
 
         document.querySelectorAll('#product-list .item-row').forEach(row => {
@@ -405,28 +427,29 @@ window.submitOrder = async function() {
             }
         });
 
-        // 4. Handle Merging: 
-        // Take items from the DB (latestOrder) that are NOT in the current screen's list.
-        // This effectively "Deletes" the old version of the screen's items from the list,
+        // 5. Handle Merging: 
+        // Take items from the master DB list that are NOT in the current screen's list.
+        // This effectively "Deletes" the old version of the screen's items,
         // and keeps items from other suppliers.
         let finalItems = [];
 
-        if (latestOrder && latestOrder.items) {
-            const keptDBItems = latestOrder.items.filter(dbItem => {
+        if (allExistingItems.length > 0) {
+            const keptDBItems = allExistingItems.filter(dbItem => {
                 const dbName = dbItem.name.trim();
-                // Keep it ONLY if it is NOT on the current screen
                 return !itemsOnScreenNames.has(dbName);
             });
             finalItems = [...keptDBItems];
         }
 
-        // 5. Add the new values from the screen
+        // 6. Add the new values from the screen
         finalItems = [...finalItems, ...submittedItems];
 
-        // 6. SAFETY NET: Deduplicate by name (Overwrite mode)
+        // 7. SAFETY NET: Deduplicate by name (Overwrite mode)
+        // If "Matcha" appeared in multiple duplicate rows, we only want ONE "Matcha" now.
         const uniqueMap = new Map();
         finalItems.forEach(item => {
             const n = item.name.trim();
+            // Map.set overwrites previous values with the latest one seen
             uniqueMap.set(n, { ...item, name: n });
         });
         finalItems = Array.from(uniqueMap.values());
@@ -439,14 +462,22 @@ window.submitOrder = async function() {
             comment: document.getElementById('order-comment').value
         };
 
-        if (latestOrder) {
-            await _supabase.from('orders').update(payload).eq('id', latestOrder.id);
+        // 8. PERFORM THE SAVE (UPDATE ONE, DELETE OTHERS)
+        if (firstRowId) {
+            // Update the main row
+            await _supabase.from('orders').update(payload).eq('id', firstRowId);
+            
+            // Delete duplicates if they existed
+            if (duplicateRowIds.length > 0) {
+                await _supabase.from('orders').delete().in('id', duplicateRowIds);
+            }
         } else {
+            // Create new if none existed
             await _supabase.from('orders').insert([payload]);
         }
         
-        // Update local ref
-        currentDBOrder = latestOrder ? { ...latestOrder, ...payload } : payload;
+        // Update local ref to be clean
+        currentDBOrder = { id: firstRowId, ...payload };
 
         alert("Saved!");
         applyStandingToDaily();
