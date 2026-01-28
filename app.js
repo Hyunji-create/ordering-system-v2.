@@ -304,7 +304,6 @@ window.applyStandingToDaily = async function() {
 
     if (data) {
         // --- AUTO-CLEAN DUPLICATES ON LOAD (Visual only) ---
-        // We use this so that if you 'Adjust', you see clean numbers (No Summing, just overwriting)
         const uniqueMap = new Map();
         data.items.forEach(item => {
              const cleanName = item.name.trim();
@@ -366,52 +365,65 @@ window.validateChanges = function() {
 window.submitOrder = async function() {
     const btn = document.getElementById('save-btn');
     
-    // 1. LOCK THE BUTTON IMMEDIATELY to prevent double-clicks on bad wifi
+    // 1. LOCK THE BUTTON IMMEDIATELY to prevent double-clicks
     if (btn) {
         btn.classList.add('btn-disabled');
         btn.innerText = "⏳ Saving...";
-        btn.disabled = true; // Hard disable
+        btn.disabled = true;
     }
 
     try {
         const dateStr = document.getElementById('delivery-date').value;
         const slot = document.getElementById('delivery-slot').value;
         
-        // 2. Capture inputs
-        const submittedItemNames = new Set();
-        const newItems = [];
+        // 2. Fetch the LATEST order state from DB right now to avoid overwriting conflicts or working with stale data
+        const { data: latestOrder } = await _supabase
+            .from('orders')
+            .select('*')
+            .eq('venue_id', window.currentUser.venue)
+            .eq('delivery_date', dateStr)
+            .eq('delivery_slot', slot)
+            .maybeSingle();
+
+        // 3. Capture inputs from the screen (Current Supplier items)
+        const submittedItems = [];
+        // Helper set to know which items are currently on screen (to filter them out from DB list)
+        const itemsOnScreenNames = new Set(); 
 
         document.querySelectorAll('#product-list .item-row').forEach(row => {
             const inp = row.querySelector('input[type="number"]');
             if (inp) {
-                // TRIM whitespace to prevent "Matcha " vs "Matcha"
                 const name = inp.dataset.name.trim(); 
                 const qty = parseInt(inp.value) || 0;
                 const note = row.querySelector('.note-input').value;
 
-                submittedItemNames.add(name);
+                itemsOnScreenNames.add(name);
 
                 if (qty > 0) {
-                    newItems.push({ name: name, quantity: qty, comment: note });
+                    submittedItems.push({ name: name, quantity: qty, comment: note });
                 }
             }
         });
 
-        // 3. Handle Merging (Keep items from other suppliers)
+        // 4. Handle Merging: 
+        // Take items from the DB (latestOrder) that are NOT in the current screen's list.
+        // This effectively "Deletes" the old version of the screen's items from the list,
+        // and keeps items from other suppliers.
         let finalItems = [];
 
-        if (currentDBOrder && currentDBOrder.items) {
-            const keptDBItems = currentDBOrder.items.filter(dbItem => {
+        if (latestOrder && latestOrder.items) {
+            const keptDBItems = latestOrder.items.filter(dbItem => {
                 const dbName = dbItem.name.trim();
-                return !submittedItemNames.has(dbName);
+                // Keep it ONLY if it is NOT on the current screen
+                return !itemsOnScreenNames.has(dbName);
             });
             finalItems = [...keptDBItems];
         }
 
-        // 4. Combine
-        finalItems = [...finalItems, ...newItems];
+        // 5. Add the new values from the screen
+        finalItems = [...finalItems, ...submittedItems];
 
-        // 5. SAFETY NET: Deduplicate (Overwrite mode)
+        // 6. SAFETY NET: Deduplicate by name (Overwrite mode)
         const uniqueMap = new Map();
         finalItems.forEach(item => {
             const n = item.name.trim();
@@ -427,9 +439,15 @@ window.submitOrder = async function() {
             comment: document.getElementById('order-comment').value
         };
 
-        if (currentDBOrder) await _supabase.from('orders').update(payload).eq('id', currentDBOrder.id);
-        else await _supabase.from('orders').insert([payload]);
+        if (latestOrder) {
+            await _supabase.from('orders').update(payload).eq('id', latestOrder.id);
+        } else {
+            await _supabase.from('orders').insert([payload]);
+        }
         
+        // Update local ref
+        currentDBOrder = latestOrder ? { ...latestOrder, ...payload } : payload;
+
         alert("Saved!");
         applyStandingToDaily();
 
@@ -437,14 +455,12 @@ window.submitOrder = async function() {
         console.error(e);
         alert("Error saving: " + e.message);
     } finally {
-        // 6. UNLOCK BUTTON (Even if error occurs)
         if (btn) {
             btn.classList.remove('btn-disabled');
-            // Restore correct text based on role
             btn.innerText = window.currentUser.role === 'kitchen' ? "Confirm & Save Final Order" : "Save Changes";
             btn.disabled = false;
         }
-        validateChanges(); // Re-check state
+        validateChanges();
     }
 };
 
@@ -499,27 +515,22 @@ window.generateConsolidatedReport = async function() {
                         const s = suppMap[i.name] || "GENERAL";
                         
                         // --- VISUAL SHIELD: CHECK IF ITEM EXISTS IN REPORT BEFORE ADDING ---
-                        // This handles the "Multiple Duplicate Rows" bug visually.
                         const existingIndex = sData[s].findIndex(existing => existing.name === i.name);
                         if (existingIndex > -1) {
                             // If exists, overwrite it (assuming duplicate row). Do NOT add.
                             sData[s][existingIndex] = { name: i.name, qty: i.quantity, note: i.comment || "" };
                         } else {
                             sData[s].push({ name: i.name, qty: i.quantity, note: i.comment || "" });
-                            // Only add to total prep if we are adding a NEW item line (avoids double counting total prep)
+                            // Only add to total prep if we are adding a NEW item line
                             if (totalPrep.hasOwnProperty(i.name)) totalPrep[i.name] += i.quantity;
                         }
                     }
                 });
             }
             if (o.delivery_date === leadDateStr) {
-                // For lead prep, we also need to be careful not to double count if multiple rows exist
-                // Ideally, we rely on the DB fix for this, but simplistic approach:
                 cleanItems.forEach(i => {
                     if (i.quantity > 0 && LEAD_2_DAY_ITEMS.includes(i.name)) {
-                         // This simple summing might double count lead prep if rows are duplicated. 
-                         // But lead prep is a summary, hard to dedupe without venue context.
-                         // The DB fix script is best for this part.
+                         // Simple sum for lead items as they are aggregate
                          leadPrep[i.name] = (leadPrep[i.name] || 0) + i.quantity;
                     }
                 });
