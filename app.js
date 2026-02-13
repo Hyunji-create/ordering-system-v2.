@@ -5,7 +5,7 @@ const PRODUCT_ORDER = [
     "Banana Bread", "Yuzu Curd", "Cookie", "Yuzu Juice", "Diced Strawberry", "Granola"
 ];
 
-const LEAD_2_DAY_ITEMS = ["Vanilla Syrup", "Simple Syrup", "Yuzu Juice"];
+const LEAD_2_DAY_ITEMS = ["Vanilla Syrup", "Simple Syrup", "Yuzu Juice", "Granola"];
 
 const USERS = [
     { id: 'wynstaff', pw: 'wynstaff', venue: 'WYN', role: 'venue' },
