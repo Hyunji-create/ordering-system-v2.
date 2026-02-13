@@ -5,6 +5,7 @@ const PRODUCT_ORDER = [
     "Banana Bread", "Yuzu Curd", "Cookie", "Yuzu Juice", "Diced Strawberry", "Granola"
 ];
 
+// ADDED GRANOLA HERE
 const LEAD_2_DAY_ITEMS = ["Vanilla Syrup", "Simple Syrup", "Yuzu Juice", "Granola"];
 
 const USERS = [
@@ -304,7 +305,6 @@ window.applyStandingToDaily = async function() {
 
     if (data) {
         // --- AUTO-CLEAN DUPLICATES ON LOAD (Visual only) ---
-        // We use this so that if you 'Adjust', you see clean numbers (No Summing, just overwriting)
         const uniqueMap = new Map();
         data.items.forEach(item => {
              const cleanName = item.name.trim();
