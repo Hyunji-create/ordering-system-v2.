@@ -525,6 +525,9 @@ window.generateConsolidatedReport = async function() {
             };
         });
 
+        // --- NEW LOGIC: Collect explicitly ordered items per venue/slot ---
+        const dailyItemsMap = new Map(); // e.g., "MCC-1st Delivery-Toastie-Beef" -> true
+
         (allOrders || []).forEach(o => {
             // DEDUPLICATE items inside this specific order row first
             const uniqueOrderItems = new Map();
@@ -532,6 +535,9 @@ window.generateConsolidatedReport = async function() {
                 o.items.forEach(i => {
                     const clean = i.name.trim();
                     uniqueOrderItems.set(clean, i); 
+                    
+                    // Register that this item was explicitly handled in the daily save
+                    dailyItemsMap.set(`${o.venue_id}-${o.delivery_slot}-${clean}`, true);
                 });
             }
             const cleanItems = Array.from(uniqueOrderItems.values());
@@ -568,12 +574,19 @@ window.generateConsolidatedReport = async function() {
             }
         });
 
+        // --- UPDATED STANDING ORDER LOGIC ---
         standings.forEach(s => {
             if (s.days_of_week.includes(targetDay) && venueReport[s.venue_id]) {
-                const sData = venueReport[s.venue_id][s.delivery_slot];
-                const hasDaily = (allOrders || []).some(o => o.delivery_date === dateStr && o.venue_id === s.venue_id && o.delivery_slot === s.delivery_slot);
-                if (!hasDaily) {
+                const cleanItemName = s.item_name.trim();
+                
+                // Check if this specific ITEM was touched in the daily save
+                const wasItemOrderedToday = dailyItemsMap.has(`${s.venue_id}-${s.delivery_slot}-${cleanItemName}`);
+                
+                // If the item wasn't included in today's save, apply the standing order for it
+                if (!wasItemOrderedToday) {
+                    const sData = venueReport[s.venue_id][s.delivery_slot];
                     const supp = suppMap[s.item_name] || "GENERAL";
+                    
                     sData[supp].push({ name: s.item_name, qty: s.quantity });
                     if (totalPrep.hasOwnProperty(s.item_name)) totalPrep[s.item_name] += s.quantity;
                 }
