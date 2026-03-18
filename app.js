@@ -386,21 +386,17 @@ window.submitOrder = async function() {
             .eq('delivery_slot', slot);
 
         // 3. Flatten ALL items from ALL duplicate rows into one master list
-        // This ensures we don't lose items from Supplier B if we happen to save Supplier A on a "ghost" row.
         let allExistingItems = [];
         let firstRowId = null;
         let duplicateRowIds = [];
 
         if (allRows && allRows.length > 0) {
-            // Sort by ID to keep the oldest or newest? Let's just keep the first one returned as master.
             firstRowId = allRows[0].id;
             
-            // Collect IDs of duplicates to delete later
             if (allRows.length > 1) {
                 duplicateRowIds = allRows.slice(1).map(r => r.id);
             }
 
-            // Merge items
             allRows.forEach(row => {
                 if (row.items && Array.isArray(row.items)) {
                     allExistingItems = [...allExistingItems, ...row.items];
@@ -421,16 +417,12 @@ window.submitOrder = async function() {
 
                 itemsOnScreenNames.add(name);
 
-                if (qty > 0) {
-                    submittedItems.push({ name: name, quantity: qty, comment: note });
-                }
+                // FIX 1: We must push ALL items (even qty 0) to explicitly override standing orders
+                submittedItems.push({ name: name, quantity: qty, comment: note });
             }
         });
 
         // 5. Handle Merging: 
-        // Take items from the master DB list that are NOT in the current screen's list.
-        // This effectively "Deletes" the old version of the screen's items,
-        // and keeps items from other suppliers.
         let finalItems = [];
 
         if (allExistingItems.length > 0) {
@@ -445,11 +437,9 @@ window.submitOrder = async function() {
         finalItems = [...finalItems, ...submittedItems];
 
         // 7. SAFETY NET: Deduplicate by name (Overwrite mode)
-        // If "Matcha" appeared in multiple duplicate rows, we only want ONE "Matcha" now.
         const uniqueMap = new Map();
         finalItems.forEach(item => {
             const n = item.name.trim();
-            // Map.set overwrites previous values with the latest one seen
             uniqueMap.set(n, { ...item, name: n });
         });
         finalItems = Array.from(uniqueMap.values());
@@ -464,19 +454,15 @@ window.submitOrder = async function() {
 
         // 8. PERFORM THE SAVE (UPDATE ONE, DELETE OTHERS)
         if (firstRowId) {
-            // Update the main row
             await _supabase.from('orders').update(payload).eq('id', firstRowId);
             
-            // Delete duplicates if they existed
             if (duplicateRowIds.length > 0) {
                 await _supabase.from('orders').delete().in('id', duplicateRowIds);
             }
         } else {
-            // Create new if none existed
             await _supabase.from('orders').insert([payload]);
         }
         
-        // Update local ref to be clean
         currentDBOrder = { id: firstRowId, ...payload };
 
         alert("Saved!");
@@ -499,9 +485,13 @@ window.generateConsolidatedReport = async function() {
     const dateStr = document.getElementById('admin-view-date').value;
     const targetDateObj = new Date(dateStr + "T00:00:00");
     const targetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][targetDateObj.getDay()];
+    
+    // Create Advanced Lead Date
     const leadDateObj = new Date(targetDateObj);
     leadDateObj.setDate(leadDateObj.getDate() + 2);
     const leadDateStr = leadDateObj.toISOString().split('T')[0];
+    const leadTargetDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][leadDateObj.getDay()];
+
     const res = document.getElementById('consolidated-results');
     if (!res) return;
     res.innerHTML = "LOADING...";
@@ -525,8 +515,9 @@ window.generateConsolidatedReport = async function() {
             };
         });
 
-        // --- NEW LOGIC: Collect explicitly ordered items per venue/slot ---
-        const dailyItemsMap = new Map(); // e.g., "MCC-1st Delivery-Toastie-Beef" -> true
+        // Maps to track which items were EXPLICITLY ordered for a specific day
+        const dailyItemsMap = new Map(); 
+        const leadItemsMap = new Map(); 
 
         (allOrders || []).forEach(o => {
             // DEDUPLICATE items inside this specific order row first
@@ -536,59 +527,73 @@ window.generateConsolidatedReport = async function() {
                     const clean = i.name.trim();
                     uniqueOrderItems.set(clean, i); 
                     
-                    // Register that this item was explicitly handled in the daily save
-                    dailyItemsMap.set(`${o.venue_id}-${o.delivery_slot}-${clean}`, true);
+                    // Track explicitly submitted daily items to prevent standing orders from overwriting 0s
+                    if (o.delivery_date === dateStr) {
+                        dailyItemsMap.set(`${o.venue_id}-${o.delivery_slot}-${clean}`, true);
+                    } else if (o.delivery_date === leadDateStr) {
+                        leadItemsMap.set(`${o.venue_id}-${o.delivery_slot}-${clean}`, true);
+                    }
                 });
             }
             const cleanItems = Array.from(uniqueOrderItems.values());
 
+            // 1. Process items explicitly ordered for TODAY
             if (o.delivery_date === dateStr && venueReport[o.venue_id]) {
                 const sData = venueReport[o.venue_id][o.delivery_slot];
                 // Keep longest note if multiple rows
                 if((o.comment||"").length > sData.note.length) sData.note = o.comment || "";
                 
                 cleanItems.forEach(i => {
+                    // Only add items > 0 to the actual report UI
                     if (i.quantity > 0) {
                         const s = suppMap[i.name] || "GENERAL";
                         
-                        // --- VISUAL SHIELD: CHECK IF ITEM EXISTS IN REPORT BEFORE ADDING ---
                         const existingIndex = sData[s].findIndex(existing => existing.name === i.name);
                         if (existingIndex > -1) {
-                            // If exists, overwrite it (assuming duplicate row). Do NOT add.
                             sData[s][existingIndex] = { name: i.name, qty: i.quantity, note: i.comment || "" };
                         } else {
                             sData[s].push({ name: i.name, qty: i.quantity, note: i.comment || "" });
-                            // Only add to total prep if we are adding a NEW item line
                             if (totalPrep.hasOwnProperty(i.name)) totalPrep[i.name] += i.quantity;
                         }
                     }
                 });
             }
+            
+            // 2. Process items explicitly ordered for ADVANCED PREP (2 days lead)
             if (o.delivery_date === leadDateStr) {
                 cleanItems.forEach(i => {
                     if (i.quantity > 0 && LEAD_2_DAY_ITEMS.includes(i.name)) {
-                         // Simple sum for lead items as they are aggregate
                          leadPrep[i.name] = (leadPrep[i.name] || 0) + i.quantity;
                     }
                 });
             }
         });
 
-        // --- UPDATED STANDING ORDER LOGIC ---
+        // --- FIX 2: Check Standing Orders for BOTH Today AND the Advance Prep Date ---
         standings.forEach(s => {
+            const cleanItemName = s.item_name.trim();
+
+            // A) Apply Standing Orders for TODAY
             if (s.days_of_week.includes(targetDay) && venueReport[s.venue_id]) {
-                const cleanItemName = s.item_name.trim();
-                
-                // Check if this specific ITEM was touched in the daily save
+                // If it was in the explicit order Map, we skip it (even if the venue overrode it to 0)
                 const wasItemOrderedToday = dailyItemsMap.has(`${s.venue_id}-${s.delivery_slot}-${cleanItemName}`);
                 
-                // If the item wasn't included in today's save, apply the standing order for it
                 if (!wasItemOrderedToday) {
                     const sData = venueReport[s.venue_id][s.delivery_slot];
                     const supp = suppMap[s.item_name] || "GENERAL";
                     
                     sData[supp].push({ name: s.item_name, qty: s.quantity });
                     if (totalPrep.hasOwnProperty(s.item_name)) totalPrep[s.item_name] += s.quantity;
+                }
+            }
+
+            // B) Apply Standing Orders for ADVANCE PREP (2 days from now)
+            if (s.days_of_week.includes(leadTargetDay) && LEAD_2_DAY_ITEMS.includes(s.item_name)) {
+                // Check if they overrode the advance prep item specifically for that future day
+                const wasItemOrderedLead = leadItemsMap.has(`${s.venue_id}-${s.delivery_slot}-${cleanItemName}`);
+                
+                if (!wasItemOrderedLead) {
+                    leadPrep[s.item_name] = (leadPrep[s.item_name] || 0) + s.quantity;
                 }
             }
         });
